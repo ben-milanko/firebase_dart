@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_dart/implementation/pure_dart.dart';
+import 'package:firebase_dart/firestore.dart';
 import 'package:firebase_dart/src/core/impl/app.dart';
 import 'package:firebase_dart/src/database.dart';
 import 'package:firebase_dart/src/core.dart';
@@ -146,6 +147,14 @@ class IsolateFirebaseImplementation extends BaseFirebaseImplementation {
     return FirebaseService.findService<IsolateFirebaseStorage>(
             app, (s) => s.bucket == storageBucket) ??
         IsolateFirebaseStorage(app: app, storageBucket: storageBucket);
+  }
+
+  @override
+  FirebaseFirestore createFirestore(IsolateFirebaseApp app,
+      {String? databaseId}) {
+    // TODO: Implement isolate support for Firestore
+    throw UnsupportedError(
+        'Firestore is not yet supported in isolate mode. Use non-isolated mode instead.');
   }
 }
 

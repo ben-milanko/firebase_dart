@@ -1,5 +1,6 @@
 import 'package:firebase_dart/auth.dart';
 import 'package:firebase_dart/database.dart';
+import 'package:firebase_dart/firestore.dart';
 import 'package:firebase_dart/src/core.dart';
 import 'package:firebase_dart/storage.dart';
 
@@ -29,6 +30,9 @@ abstract class FirebaseImplementation {
 
   FirebaseStorage createStorage(covariant FirebaseApp app,
       {String? storageBucket});
+
+  FirebaseFirestore createFirestore(covariant FirebaseApp app,
+      {String? databaseId});
 
   Future<void> updateDatabaseConfiguration(
       {Duration? keepQueriesSyncedDuration});
