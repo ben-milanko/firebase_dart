@@ -20,7 +20,7 @@ class Settings {
   final int? cacheSizeBytes;
 
   /// Constant to use with [cacheSizeBytes] to disable garbage collection.
-  static const int CACHE_SIZE_UNLIMITED = -1;
+  static const int cacheSizeUnlimited = -1;
 
   const Settings({
     this.host,

@@ -7,16 +7,16 @@ import 'document_reference_impl.dart';
 import 'query_impl.dart';
 
 class CollectionReferenceImpl extends QueryImpl implements CollectionReference {
-  @override
-  final String path;
-
   CollectionReferenceImpl({
     required super.firestore,
-    required this.path,
+    required String path,
   }) : super(path: path);
 
   @override
   String get id => path.split('/').last;
+
+  @override
+  String get path => super.path!;
 
   @override
   DocumentReference? get parent {
@@ -34,7 +34,7 @@ class CollectionReferenceImpl extends QueryImpl implements CollectionReference {
   @override
   DocumentReference doc([String? docPath]) {
     final docId = docPath ?? const Uuid().v4();
-    
+
     if (docId.isEmpty) {
       throw ArgumentError('Document ID must not be empty');
     }
@@ -58,4 +58,3 @@ class CollectionReferenceImpl extends QueryImpl implements CollectionReference {
   @override
   String toString() => 'CollectionReference($path)';
 }
-

@@ -16,7 +16,8 @@ abstract class FirestoreBackend {
   Future<void> commit(List<Mutation> mutations);
 
   /// Commits mutations within a transaction.
-  Future<void> commitTransaction(List<Mutation> mutations, Set<String> readPaths);
+  Future<void> commitTransaction(
+      List<Mutation> mutations, Set<String> readPaths);
 
   /// Listens to document changes.
   Stream<Document> listenToDocument(String path);
@@ -33,4 +34,3 @@ abstract class FirestoreBackend {
   /// Terminates the backend connection.
   Future<void> terminate();
 }
-

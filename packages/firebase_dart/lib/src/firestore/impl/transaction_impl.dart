@@ -44,7 +44,8 @@ class TransactionImpl extends Transaction {
   }
 
   @override
-  Transaction set(DocumentReference documentReference, Map<String, dynamic> data,
+  Transaction set(
+      DocumentReference documentReference, Map<String, dynamic> data,
       [SetOptions? options]) {
     _verifyNotCommitted();
 
@@ -97,4 +98,3 @@ class TransactionImpl extends Transaction {
     await firestore.syncEngine.writeInTransaction(_mutations, _readPaths);
   }
 }
-

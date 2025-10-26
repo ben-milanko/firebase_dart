@@ -2,24 +2,21 @@ import 'dart:async';
 
 import 'package:firebase_dart/core.dart';
 import 'package:firebase_dart/firestore.dart';
-import 'package:firebase_dart/src/implementation.dart';
 import 'package:firebase_dart/src/core/impl/app.dart';
+import 'package:firebase_dart/src/implementation.dart';
 
+import 'backend/rest_backend.dart';
 import 'collection_reference_impl.dart';
 import 'document_reference_impl.dart';
-import 'query_impl.dart';
-import 'write_batch_impl.dart';
-import 'transaction_impl.dart';
-import 'sync_engine.dart';
 import 'local_store.dart';
-import 'remote_store.dart';
-import 'backend/rest_backend.dart';
 import 'persistence/memory_persistence.dart';
+import 'query_impl.dart';
+import 'remote_store.dart';
+import 'sync_engine.dart';
+import 'transaction_impl.dart';
+import 'write_batch_impl.dart';
 
 class FirestoreImpl extends FirebaseService implements FirebaseFirestore {
-  @override
-  final FirebaseApp app;
-
   final String databaseId;
 
   Settings _settings;
@@ -31,7 +28,7 @@ class FirestoreImpl extends FirebaseService implements FirebaseFirestore {
   bool _terminated = false;
 
   FirestoreImpl({
-    required this.app,
+    required FirebaseApp app,
     required this.databaseId,
     Settings? settings,
     AuthTokenProvider? authTokenProvider,
