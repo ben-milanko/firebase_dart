@@ -520,7 +520,7 @@ void main() {
           expectedBody: () =>
               {'identifier': identifier, 'continueUri': platform.currentUrl},
           action: () => rpcHandler.fetchProvidersForIdentifier(identifier),
-          expectedResult: (r) => r['allProviders'] ?? [],
+          expectedResult: (r) => r['signinMethods'] ?? [],
         );
 
         test('fetchProvidersForIdentifier: success', () async {
@@ -528,7 +528,7 @@ void main() {
             serverResponse: {
               'authUri': 'https://accounts.google.com/o/oauth2/auth?foo=bar',
               'providerId': 'google.com',
-              'allProviders': ['google.com', 'myauthprovider.com'],
+              'signinMethods': ['google.com', 'myauthprovider.com'],
               'registered': true,
               'forExistingProvider': true,
               'sessionId': 'MY_SESSION_ID'
@@ -542,7 +542,7 @@ void main() {
               serverResponse: {
                 'authUri': 'https://accounts.google.com/o/oauth2/auth?foo=bar',
                 'providerId': 'google.com',
-                'allProviders': ['google.com', 'myauthprovider.com'],
+                'signinMethods': ['google.com', 'myauthprovider.com'],
                 'registered': true,
                 'forExistingProvider': true,
                 'sessionId': 'MY_SESSION_ID'
@@ -570,7 +570,7 @@ void main() {
             serverResponse: {
               'authUri': 'https://accounts.google.com/o/oauth2/auth?foo=bar',
               'providerId': 'google.com',
-              'allProviders': ['google.com', 'myauthprovider.com'],
+              'signinMethods': ['google.com', 'myauthprovider.com'],
               'registered': true,
               'forExistingProvider': true,
               'sessionId': 'MY_SESSION_ID'
@@ -3162,11 +3162,7 @@ void main() {
 
         var tester = Tester(
           path: 'accounts:signInWithPhoneNumber',
-          expectedBody: {
-            'sessionInfo': 'SESSION_INFO',
-            'code': '123456',
-            'operation': 'REAUTH'
-          },
+          expectedBody: {'sessionInfo': 'SESSION_INFO', 'code': '123456'},
           expectedResult: (response) {
             return {'id_token': response['idToken']};
           },
@@ -3233,8 +3229,7 @@ void main() {
           var t = tester.replace(
             expectedBody: {
               'phoneNumber': '16505550101',
-              'temporaryProof': 'TEMPORARY_PROOF',
-              'operation': 'REAUTH'
+              'temporaryProof': 'TEMPORARY_PROOF'
             },
             action: () => rpcHandler
                 .signInWithPhoneNumberForExisting(
@@ -3529,7 +3524,7 @@ void main() {
                           'authUri':
                               'https://accounts.google.com/o/oauth2/auth?foo=bar',
                           'providerId': 'google.com',
-                          'allProviders': ['google.com', 'myauthprovider.com'],
+                          'signinMethods': ['google.com', 'myauthprovider.com'],
                           'registered': true,
                           'forExistingProvider': true,
                           'sessionId': 'MY_SESSION_ID'

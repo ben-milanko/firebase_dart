@@ -513,31 +513,35 @@ class RpcHandler {
   /// Returns future that resolves with user's email.
   Future<String?> confirmPasswordReset(String code, String newPassword) async {
     _validateApplyActionCode(code);
-    // Extract user ID from oobCode JWT to get email from account info
-    var jwt = JsonWebToken.unverified(code);
-    var userId = jwt.claims.subject;
-    if (userId == null) {
-      throw FirebaseAuthException.invalidOobCode();
+    // Try to extract user ID from oobCode JWT to get email from account info
+    String? email;
+    try {
+      var jwt = JsonWebToken.unverified(code);
+      var userId = jwt.claims.subject;
+      if (userId != null) {
+        // Get account info using lookup with localId to retrieve email from providerUserInfo
+        var lookupResponse = await _handle(() => identitytoolkitApi.accounts
+            .lookup(GoogleCloudIdentitytoolkitV1GetAccountInfoRequest()
+              ..localId = [userId]));
+        if (lookupResponse.users!.isNotEmpty) {
+          var accountInfo = lookupResponse.users!.first;
+          final passwordProvider = accountInfo.providerUserInfo
+              ?.where((p) => p.providerId == EmailAuthProvider.id)
+              .firstOrNull;
+          email = passwordProvider?.email ?? accountInfo.email;
+        }
+      }
+    } catch (e) {
+      // If oobCode is not a valid JWT, fall back to using response email
     }
-    // Get account info using lookup with localId to retrieve email from providerUserInfo
-    var lookupResponse = await _handle(() => identitytoolkitApi.accounts.lookup(
-        GoogleCloudIdentitytoolkitV1GetAccountInfoRequest()
-          ..localId = [userId]));
-    if (lookupResponse.users!.isEmpty) {
-      throw FirebaseAuthException.internalError();
-    }
-    var accountInfo = lookupResponse.users!.first;
 
-    await identitytoolkitApi.accounts
+    var response = await identitytoolkitApi.accounts
         .resetPassword(GoogleCloudIdentitytoolkitV1ResetPasswordRequest()
           ..oobCode = code
           ..newPassword = newPassword);
 
-    // Get email from providerUserInfo (password provider) if available
-    final passwordProvider = accountInfo.providerUserInfo
-        ?.where((p) => p.providerId == EmailAuthProvider.id)
-        .firstOrNull;
-    return passwordProvider?.email ?? accountInfo.email;
+    // Return email from account info if we got it, otherwise use deprecated response field
+    return email ?? response.email;
   }
 
   /// Checks the validity of an email action code and returns the response
@@ -556,29 +560,33 @@ class RpcHandler {
   /// code.
   Future<String?> applyActionCode(String code) async {
     _validateApplyActionCode(code);
-    // Extract user ID from oobCode JWT to get email from account info
-    var jwt = JsonWebToken.unverified(code);
-    var userId = jwt.claims.subject;
-    if (userId == null) {
-      throw FirebaseAuthException.invalidOobCode();
+    // Try to extract user ID from oobCode JWT to get email from account info
+    String? email;
+    try {
+      var jwt = JsonWebToken.unverified(code);
+      var userId = jwt.claims.subject;
+      if (userId != null) {
+        // Get account info using lookup with localId to retrieve email from providerUserInfo
+        var lookupResponse = await _handle(() => identitytoolkitApi.accounts
+            .lookup(GoogleCloudIdentitytoolkitV1GetAccountInfoRequest()
+              ..localId = [userId]));
+        if (lookupResponse.users!.isNotEmpty) {
+          var accountInfo = lookupResponse.users!.first;
+          final passwordProvider = accountInfo.providerUserInfo
+              ?.where((p) => p.providerId == EmailAuthProvider.id)
+              .firstOrNull;
+          email = passwordProvider?.email ?? accountInfo.email;
+        }
+      }
+    } catch (e) {
+      // If oobCode is not a valid JWT, fall back to using response email
     }
-    // Get account info using lookup with localId to retrieve email from providerUserInfo
-    var lookupResponse = await _handle(() => identitytoolkitApi.accounts.lookup(
-        GoogleCloudIdentitytoolkitV1GetAccountInfoRequest()
-          ..localId = [userId]));
-    if (lookupResponse.users!.isEmpty) {
-      throw FirebaseAuthException.internalError();
-    }
-    var accountInfo = lookupResponse.users!.first;
 
-    await identitytoolkitApi.accounts.update(
+    var response = await identitytoolkitApi.accounts.update(
         GoogleCloudIdentitytoolkitV1SetAccountInfoRequest()..oobCode = code);
 
-    // Get email from providerUserInfo (password provider) if available
-    final passwordProvider = accountInfo.providerUserInfo
-        ?.where((p) => p.providerId == EmailAuthProvider.id)
-        .firstOrNull;
-    return passwordProvider?.email ?? accountInfo.email;
+    // Return email from account info if we got it, otherwise use deprecated response field
+    return email ?? response.email;
   }
 
   /// Updates the providers for the account associated with the idToken.
