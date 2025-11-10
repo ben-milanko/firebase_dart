@@ -438,11 +438,25 @@ class FirebaseUserImpl extends User with DelegatingUserInfo {
     await _updateTokensIfPresent(response);
 
     // Update properties.
-    _accountInfo = AccountInfo.fromJson({
-      ..._accountInfo.toJson(),
-      'displayName': response.displayName,
-      'photoUrl': response.photoUrl
-    });
+    // Get displayName and photoUrl from providerUserInfo (password provider) if available
+    final passwordProvider = response.providerUserInfo
+        ?.where((p) => p.providerId == EmailAuthProvider.id)
+        .firstOrNull;
+    if (passwordProvider != null) {
+      // Use providerUserInfo values instead of deprecated top-level fields
+      _accountInfo = AccountInfo.fromJson({
+        ..._accountInfo.toJson(),
+        'displayName': passwordProvider.displayName,
+        'photoUrl': passwordProvider.photoUrl
+      });
+    } else {
+      // Fallback to deprecated fields only if providerUserInfo is not available
+      _accountInfo = AccountInfo.fromJson({
+        ..._accountInfo.toJson(),
+        'displayName': response.displayName,
+        'photoUrl': response.photoUrl
+      });
+    }
 
     for (var userInfo in providerData) {
       // Check if password provider is linked.

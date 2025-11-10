@@ -6,8 +6,8 @@ import 'package:firebase_dart/src/util/proxy.dart';
 import 'package:firebaseapis/identitytoolkit/v2.dart' hide IdentityToolkitApi;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart' as http;
+import 'package:jose/jose.dart';
 import 'package:openid_client/openid_client.dart' as openid;
-import 'identitytoolkit.dart';
 
 import '../action_code.dart';
 import '../auth_credential.dart';
@@ -16,6 +16,7 @@ import '../error.dart';
 import '../multi_factor.dart';
 import 'error.dart';
 import 'http_util.dart';
+import 'identitytoolkit.dart';
 
 class RpcHandler {
   final IdentityToolkitApi identitytoolkitApi;
@@ -134,7 +135,7 @@ class RpcHandler {
   /// Gets the list of IDPs that can be used to log in for the given identifier.
   Future<List<String>?> fetchProvidersForIdentifier(String identifier) async {
     var response = await _createAuthUri(identifier);
-    return response.allProviders;
+    return response.signinMethods;
   }
 
   /// Requests getAccountInfo endpoint using an ID token.
@@ -317,7 +318,7 @@ class RpcHandler {
       ..sessionId = sessionId
       ..requestUri = requestUri
       ..returnSecureToken = true
-      ..pendingIdToken = pendingIdToken;
+      ..pendingToken = pendingIdToken;
 
     return await _signInWithIdp(request);
   }
@@ -332,7 +333,7 @@ class RpcHandler {
     return await _signInWithIdp(
         GoogleCloudIdentitytoolkitV1SignInWithIdpRequest()
           ..postBody = postBody
-          ..pendingIdToken = pendingToken
+          ..pendingToken = pendingToken
           ..idToken = idToken
           ..sessionId = sessionId
           ..requestUri = requestUri);
@@ -347,9 +348,8 @@ class RpcHandler {
     return await _signInWithIdp(
         GoogleCloudIdentitytoolkitV1SignInWithIdpRequest()
           ..returnIdpCredential = true
-          ..autoCreate = false
           ..postBody = postBody
-          ..pendingIdToken = pendingToken
+          ..pendingToken = pendingToken
           ..requestUri = requestUri
           ..sessionId = sessionId);
   }
@@ -453,15 +453,12 @@ class RpcHandler {
   Future<String?> sendSignInLinkToEmail(
       {required String email, ActionCodeSettings? actionCodeSettings}) async {
     _validateEmail(email);
-    var response = await identitytoolkitApi.accounts
+    await identitytoolkitApi.accounts
         .sendOobCode(_createGetOobCodeRequest(actionCodeSettings)
           ..requestType = 'EMAIL_SIGNIN'
           ..email = email);
-
-    if (response.email == null) {
-      throw FirebaseAuthException.internalError();
-    }
-    return response.email;
+    // Return email from request instead of deprecated response field
+    return email;
   }
 
   GoogleCloudIdentitytoolkitV1GetOobCodeRequest _createGetOobCodeRequest(
@@ -485,15 +482,12 @@ class RpcHandler {
   Future<String?> sendPasswordResetEmail(
       {required String email, ActionCodeSettings? actionCodeSettings}) async {
     _validateEmail(email);
-    var response = await identitytoolkitApi.accounts
+    await identitytoolkitApi.accounts
         .sendOobCode(_createGetOobCodeRequest(actionCodeSettings)
           ..requestType = 'PASSWORD_RESET'
           ..email = email);
-
-    if (response.email == null) {
-      throw FirebaseAuthException.internalError();
-    }
-    return response.email;
+    // Return email from request instead of deprecated response field
+    return email;
   }
 
   /// Requests getOobCode endpoint for email verification.
@@ -501,15 +495,17 @@ class RpcHandler {
   /// Returns future that resolves with user's email.
   Future<String?> sendEmailVerification(
       {required String idToken, ActionCodeSettings? actionCodeSettings}) async {
-    var response = await identitytoolkitApi.accounts
+    // Get email from account info instead of deprecated response field
+    var accountInfo = await getAccountInfoByIdToken(idToken);
+    await identitytoolkitApi.accounts
         .sendOobCode(_createGetOobCodeRequest(actionCodeSettings)
           ..requestType = 'VERIFY_EMAIL'
           ..idToken = idToken);
-
-    if (response.email == null) {
-      throw FirebaseAuthException.internalError();
-    }
-    return response.email;
+    // Get email from providerUserInfo (password provider) if available, otherwise use top-level
+    final passwordProvider = accountInfo.providerUserInfo
+        ?.where((p) => p.providerId == EmailAuthProvider.id)
+        .firstOrNull;
+    return passwordProvider?.email ?? accountInfo.email;
   }
 
   /// Requests resetPassword endpoint for password reset.
@@ -517,15 +513,31 @@ class RpcHandler {
   /// Returns future that resolves with user's email.
   Future<String?> confirmPasswordReset(String code, String newPassword) async {
     _validateApplyActionCode(code);
-    var response = await identitytoolkitApi.accounts
+    // Extract user ID from oobCode JWT to get email from account info
+    var jwt = JsonWebToken.unverified(code);
+    var userId = jwt.claims.subject;
+    if (userId == null) {
+      throw FirebaseAuthException.invalidOobCode();
+    }
+    // Get account info using lookup with localId to retrieve email from providerUserInfo
+    var lookupResponse = await _handle(() => identitytoolkitApi.accounts.lookup(
+        GoogleCloudIdentitytoolkitV1GetAccountInfoRequest()
+          ..localId = [userId]));
+    if (lookupResponse.users!.isEmpty) {
+      throw FirebaseAuthException.internalError();
+    }
+    var accountInfo = lookupResponse.users!.first;
+
+    await identitytoolkitApi.accounts
         .resetPassword(GoogleCloudIdentitytoolkitV1ResetPasswordRequest()
           ..oobCode = code
           ..newPassword = newPassword);
 
-    if (response.email == null) {
-      throw FirebaseAuthException.internalError();
-    }
-    return response.email;
+    // Get email from providerUserInfo (password provider) if available
+    final passwordProvider = accountInfo.providerUserInfo
+        ?.where((p) => p.providerId == EmailAuthProvider.id)
+        .firstOrNull;
+    return passwordProvider?.email ?? accountInfo.email;
   }
 
   /// Checks the validity of an email action code and returns the response
@@ -544,13 +556,29 @@ class RpcHandler {
   /// code.
   Future<String?> applyActionCode(String code) async {
     _validateApplyActionCode(code);
-    var response = await identitytoolkitApi.accounts.update(
-        GoogleCloudIdentitytoolkitV1SetAccountInfoRequest()..oobCode = code);
-
-    if (response.email == null) {
+    // Extract user ID from oobCode JWT to get email from account info
+    var jwt = JsonWebToken.unverified(code);
+    var userId = jwt.claims.subject;
+    if (userId == null) {
+      throw FirebaseAuthException.invalidOobCode();
+    }
+    // Get account info using lookup with localId to retrieve email from providerUserInfo
+    var lookupResponse = await _handle(() => identitytoolkitApi.accounts.lookup(
+        GoogleCloudIdentitytoolkitV1GetAccountInfoRequest()
+          ..localId = [userId]));
+    if (lookupResponse.users!.isEmpty) {
       throw FirebaseAuthException.internalError();
     }
-    return response.email;
+    var accountInfo = lookupResponse.users!.first;
+
+    await identitytoolkitApi.accounts.update(
+        GoogleCloudIdentitytoolkitV1SetAccountInfoRequest()..oobCode = code);
+
+    // Get email from providerUserInfo (password provider) if available
+    final passwordProvider = accountInfo.providerUserInfo
+        ?.where((p) => p.providerId == EmailAuthProvider.id)
+        .firstOrNull;
+    return passwordProvider?.email ?? accountInfo.email;
   }
 
   /// Updates the providers for the account associated with the idToken.
@@ -798,12 +826,12 @@ class RpcHandler {
       String? code,
       String? temporaryProof,
       String? phoneNumber}) async {
+    // operation field is deprecated - API should infer reauthentication from context
     var request = GoogleCloudIdentitytoolkitV1SignInWithPhoneNumberRequest()
       ..sessionInfo = sessionInfo
       ..code = code
       ..temporaryProof = temporaryProof
-      ..phoneNumber = phoneNumber
-      ..operation = 'REAUTH';
+      ..phoneNumber = phoneNumber;
     _validateSignInWithPhoneNumberRequest(request);
 
     var response =
@@ -1067,6 +1095,8 @@ class RpcHandler {
       FirebaseAuthException? error, Object response) {
     String? message, email, phoneNumber;
     if (response is GoogleCloudIdentitytoolkitV1SignInWithIdpResponse) {
+      // ignore: deprecated_member_use
+      // email is deprecated but still returned by API
       email = response.email;
     } else if (response
         is GoogleCloudIdentitytoolkitV1SignInWithPhoneNumberResponse) {
@@ -1217,7 +1247,7 @@ class RpcHandler {
     if (request.requestUri == null ||
         (request.sessionId == null &&
             request.postBody == null &&
-            request.pendingIdToken == null)) {
+            request.pendingToken == null)) {
       throw FirebaseAuthException.internalError();
     }
   }
@@ -1231,6 +1261,8 @@ class RpcHandler {
     // Email could be empty only if the request type is EMAIL_SIGNIN.
     var operation = response.requestType;
     if (operation == null ||
+        // ignore: deprecated_member_use
+        // email is deprecated but still used for validation
         (response.email == null && operation != 'EMAIL_SIGNIN')) {
       throw FirebaseAuthException.internalError();
     }

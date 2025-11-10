@@ -89,7 +89,7 @@ class BackendConnection {
     var user = await backend.getUserByEmail(email);
 
     return GoogleCloudIdentitytoolkitV1CreateAuthUriResponse()
-      ..allProviders = [for (var p in user.providerUserInfo!) p.providerId!]
+      // allProviders is deprecated and redundant with signinMethods
       ..signinMethods = [for (var p in user.providerUserInfo!) p.providerId!];
   }
 
@@ -198,21 +198,34 @@ class BackendConnection {
 
     await backend.updateUser(user);
 
-    return GoogleCloudIdentitytoolkitV1SetAccountInfoResponse()
-      ..displayName = user.displayName
-      ..photoUrl = user.photoUrl
-      ..email = user.email
-      ..idToken = request.returnSecureToken == true
-          ? await backend.generateIdToken(
-              uid: user.localId, providerId: 'password')
-          : null
-      ..providerUserInfo = [
-        for (var u in user.providerUserInfo!)
-          GoogleCloudIdentitytoolkitV1ProviderUserInfo()
-            ..providerId = u.providerId
-            ..photoUrl = u.photoUrl
-            ..displayName = u.displayName
-      ];
+    // Get primary email from password provider if available, otherwise use top-level
+    final passwordProvider = user.providerUserInfo
+        ?.where((p) => p.providerId == 'password')
+        .firstOrNull;
+    final response = GoogleCloudIdentitytoolkitV1SetAccountInfoResponse();
+    // Set deprecated fields only if providerUserInfo doesn't have the values
+    // The API may still require these for backward compatibility
+    if (passwordProvider != null) {
+      response.displayName = passwordProvider.displayName;
+      response.photoUrl = passwordProvider.photoUrl;
+      response.email = passwordProvider.email;
+    } else {
+      response.displayName = user.displayName;
+      response.photoUrl = user.photoUrl;
+      response.email = user.email;
+    }
+    response.idToken = request.returnSecureToken == true
+        ? await backend.generateIdToken(
+            uid: user.localId, providerId: 'password')
+        : null;
+    response.providerUserInfo = [
+      for (var u in user.providerUserInfo!)
+        GoogleCloudIdentitytoolkitV1ProviderUserInfo()
+          ..providerId = u.providerId
+          ..photoUrl = u.photoUrl
+          ..displayName = u.displayName
+    ];
+    return response;
   }
 
   Future<GoogleCloudIdentitytoolkitV1SendVerificationCodeResponse>

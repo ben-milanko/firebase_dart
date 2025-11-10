@@ -1,7 +1,11 @@
-import 'dart:js';
+import 'dart:js_interop';
+
+@JS('window')
+external JSObject get _window;
 
 dynamic getObjectRef(String ref) {
-  dynamic m = context;
+  // Use dart:js_interop to access global context
+  dynamic m = _window;
   for (var k in ref.split('.')) {
     m = m?[k];
   }

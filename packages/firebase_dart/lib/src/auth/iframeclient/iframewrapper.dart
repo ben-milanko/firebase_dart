@@ -3,17 +3,40 @@
 @JS()
 library;
 
-import 'package:js/js.dart';
-
 import 'dart:async';
-import 'dart:html';
-import 'dart:js';
-import 'dart:js_util';
+import 'dart:js_interop';
 import 'dart:math';
+
+import 'package:js/js.dart' as js;
+import 'package:web/web.dart' as web;
+
 import 'gapi.dart' as gapi;
 import 'gapi_iframes.dart' as gapi;
 import 'gapi_iframes.dart';
 import 'util.dart' as util;
+
+@JS('window')
+external JSObject get _jsWindow;
+
+// Helper function to set JS properties using dart:js_interop
+@JS('Object.assign')
+external void _jsObjectAssign(JSObject target, JSObject source);
+
+void _setJSProperty(JSObject obj, String name, JSAny value) {
+  // Use JS interop to set property by creating a temporary object
+  final temp = <String, JSAny>{name: value}.jsify() as JSObject;
+  _jsObjectAssign(obj, temp);
+}
+
+// Helper function to convert IThenable to Dart Future
+Future<T> _promiseToFuture<T>(gapi.IThenable thenable) {
+  final completer = Completer<T>();
+  thenable.then(
+    js.allowInterop((value) => completer.complete(value as T)),
+    js.allowInterop((error) => completer.completeError(error)),
+  );
+  return completer.future;
+}
 
 /// Defines the hidden iframe wrapper for cross origin communications.
 class IframeWrapper {
@@ -35,20 +58,20 @@ class IframeWrapper {
     return IframeWrapper._loadGApiJs().then((_) {
       var completer = Completer<void>();
 
-      var container = DivElement();
-      document.body!.append(container);
+      var container = web.HTMLDivElement();
+      web.document.body!.appendChild(container);
       gapi.getContext().open(
           gapi.IframeOptions(
               where: container,
               url: url,
               messageHandlersFilter: gapi.CROSS_ORIGIN_IFRAMES_FILTER,
               attributes: gapi.IframeAttributes(
-                  style: CssStyleDeclaration()
+                  style: (web.document.createElement('div') as web.HTMLElement).style
                     ..position = 'absolute'
                     ..top = '-100px'
                     ..width = '1px'
                     ..height = '1px'),
-              dontclear: true), allowInterop(
+              dontclear: true), js.allowInterop(
         (iframe) {
           _iframe = iframe;
           _iframe.restyle(gapi.IframeRestyleOptions(
@@ -57,7 +80,7 @@ class IframeWrapper {
 
           // This returns an IThenable. However the reject part does not call
           // when the iframe is not loaded.
-          promiseToFuture(iframe.ping())
+          _promiseToFuture<void>(iframe.ping())
               // Confirm iframe is correctly loaded.
               // To fallback on failure, set a timeout.
               .timeout(PING_TIMEOUT_.get())
@@ -74,7 +97,7 @@ class IframeWrapper {
     return _onIframeOpen.then((_) {
       var completer = Completer<Map<String, dynamic>?>();
 
-      _iframe.send(message.type, message, allowInterop(completer.complete),
+      _iframe.send(message.type, message, js.allowInterop(completer.complete),
           gapi.CROSS_ORIGIN_IFRAMES_FILTER);
       return completer.future;
     });
@@ -88,7 +111,7 @@ class IframeWrapper {
         return handler(event);
       };
       _iframe.register(
-          eventName, allowInterop(h), gapi.CROSS_ORIGIN_IFRAMES_FILTER);
+          eventName, js.allowInterop(h), gapi.CROSS_ORIGIN_IFRAMES_FILTER);
     });
   }
 
@@ -97,7 +120,7 @@ class IframeWrapper {
   /// Unregisters a listener to a post message.
   void unregisterEvent(String eventName, Function(dynamic) handler) {
     _onIframeOpen.then((_) {
-      _iframe.unregister(eventName, allowInterop(_handlers[handler]!));
+      _iframe.unregister(eventName, js.allowInterop(_handlers[handler]!));
     });
   }
 
@@ -136,8 +159,8 @@ class IframeWrapper {
         gapi.load(
             'gapi.iframes',
             gapi.LoadConfig(
-                callback: allowInterop(completer.complete),
-                ontimeout: allowInterop(() {
+                callback: js.allowInterop(completer.complete),
+                ontimeout: js.allowInterop(() {
                   // The above reset may be sufficient, but having this reset after
                   // failure ensures that if the developer calls gapi.load after the
                   // connection is re-established and before another attempt to embed
@@ -164,7 +187,8 @@ class IframeWrapper {
         // timeout.
         var cbName = '__iframefcb${_random.nextInt(1000000)}';
         // GApi loader not available, dynamically load platform.js.
-        context[cbName] = allowInterop(() {
+        // Set callback on window using JS interop helper
+        final callback = js.allowInterop(() {
           // GApi loader should be ready.
           if (util.getObjectRef('gapi.load') != null) {
             onGapiLoad();
@@ -173,12 +197,13 @@ class IframeWrapper {
             completer.completeError(Exception('Network Error'));
           }
         });
+        _setJSProperty(_jsWindow, cbName, callback.toJS);
         // Build GApi loader.
         var url = Uri.parse(IframeWrapper.GAPI_LOADER_SRC_)
             .replace(queryParameters: {'onload': cbName});
         // Load GApi loader.
-        var script = ScriptElement()..src = url.toString();
-        document.body!.append(script);
+        var script = web.HTMLScriptElement()..src = url.toString();
+        web.document.body!.appendChild(script);
       }
 
       return completer.future;

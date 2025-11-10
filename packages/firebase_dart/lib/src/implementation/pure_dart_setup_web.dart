@@ -6,10 +6,10 @@ import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:jose/jose.dart';
-import 'dart:html';
+import 'package:web/web.dart' as web;
 
 bool _isMobile() {
-  final navigatorPlatform = window.navigator.platform?.toLowerCase() ?? '';
+  final navigatorPlatform = web.window.navigator.platform?.toLowerCase() ?? '';
   if (navigatorPlatform.startsWith('mac')) {
     return false;
   }
@@ -29,7 +29,7 @@ bool _isMobile() {
   // indicates that a device has a "fine pointer" (mouse) as the primary
   // pointing device, then we'll assume desktop linux, and otherwise we'll
   // assume Android.
-  if (window.matchMedia('only screen and (pointer: fine)').matches) {
+  if (web.window.matchMedia('only screen and (pointer: fine)').matches) {
     return false;
   }
   return true;
