@@ -1,16 +1,15 @@
 // ignore_for_file: implementation_imports
 
-import 'package:firebase_dart/src/database/impl/treestructureddata.dart';
+import 'package:firebase_dart/database.dart';
 import 'package:firebase_dart/src/database/impl/data_observer.dart';
-import 'package:firebase_dart/src/database/impl/view.dart';
-import 'package:firebase_dart/src/database/impl/tree.dart';
-import 'package:firebase_dart/src/database/impl/operations/tree.dart';
 import 'package:firebase_dart/src/database/impl/firebase_impl.dart';
+import 'package:firebase_dart/src/database/impl/operations/tree.dart';
+import 'package:firebase_dart/src/database/impl/tree.dart';
+import 'package:firebase_dart/src/database/impl/treestructureddata.dart';
+import 'package:firebase_dart/src/database/impl/view.dart';
 import 'package:firebase_dart/src/implementation/isolate/database.dart';
 import 'package:rxdart/rxdart.dart';
-
 import 'package:sortedmap/sortedmap.dart';
-import 'package:firebase_dart/database.dart';
 
 extension FirebaseDatabaseWithWriteBatch on FirebaseDatabase {
   WriteBatch batch() => WriteBatch(reference());
@@ -251,9 +250,11 @@ class TransactionalDatabaseReference extends TransactionalQuery
   @override
   Future<TransactionResult> runTransaction(
       TransactionHandler transactionHandler,
-      {Duration timeout = const Duration(seconds: 5)}) {
-    // TODO: implement runTransaction
-    throw UnimplementedError();
+      {Duration timeout = const Duration(seconds: 5)}) async {
+    // Delegate to the underlying reference's runTransaction
+    // The transaction will see the current database state
+    // Note: Transaction writes are separate from batch operations
+    return await _query.runTransaction(transactionHandler, timeout: timeout);
   }
 
   Path<Name> get _path => Name.parsePath(_query.path);

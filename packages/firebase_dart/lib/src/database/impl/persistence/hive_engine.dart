@@ -432,25 +432,54 @@ class KeyValueDatabase {
   Iterable<dynamic> valuesBetween(
       {required String startKey, required String endKey}) {
     assert(box.isOpen);
-    // TODO merge transaction data
     return keysBetween(startKey: startKey, endKey: endKey)
-        .map((k) => box.get(k));
+        .map((k) => _transaction?[k] ?? box.get(k));
   }
 
   Iterable<String> keysBetween(
       {required String startKey, required String endKey}) sync* {
     assert(box.isOpen);
-    // TODO merge transaction data
+    // Collect keys from both box and transaction, then merge and filter
+    var allKeys = <String>{};
+    
+    // Add keys from box
     for (var k in box.keys) {
-      if (box.get(k) == null) return;
+      if (box.get(k) == null) continue;
       if (Comparable.compare(k, startKey) < 0) continue;
-      if (Comparable.compare(k, endKey) > 0) return;
-      yield k as String;
+      if (Comparable.compare(k, endKey) > 0) continue;
+      allKeys.add(k as String);
+    }
+    
+    // Add keys from transaction
+    if (_transaction != null) {
+      for (var k in _transaction!.keys) {
+        if (Comparable.compare(k, startKey) < 0) continue;
+        if (Comparable.compare(k, endKey) > 0) continue;
+        // If transaction has null value, it means deletion - don't include it
+        if (_transaction![k] != null) {
+          allKeys.add(k);
+        } else {
+          // If deleted in transaction, remove from set
+          allKeys.remove(k);
+        }
+      }
+    }
+    
+    // Yield keys in sorted order
+    var sortedKeys = allKeys.toList()..sort();
+    for (var k in sortedKeys) {
+      yield k;
     }
   }
 
   bool containsKey(String key) {
     assert(box.isOpen);
+    // Check transaction first - if key is in transaction with null value, it's deleted
+    if (_transaction != null) {
+      if (_transaction!.containsKey(key)) {
+        return _transaction![key] != null;
+      }
+    }
     return box.containsKey(key);
   }
 

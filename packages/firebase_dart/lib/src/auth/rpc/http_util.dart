@@ -8,6 +8,8 @@ class MetadataClient extends http.BaseClient {
 
   String? _locale;
 
+  String? get locale => _locale;
+
   set locale(String? value) {
     if (value != null) {
       Locale.parse(value);

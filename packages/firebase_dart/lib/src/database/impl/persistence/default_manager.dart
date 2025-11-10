@@ -82,7 +82,7 @@ class DefaultPersistenceManager implements PersistenceManager {
 
   bool _completeQueryContains(
       QueryFilter masterFilter, IncompleteData data, QueryFilter f) {
-    var v = MasterView(masterFilter)
+    var v = MasterView(masterFilter, persistenceManager: null, path: null)
       ..applyOperation(TreeOperation.overwrite(Path.from([]), data.value),
           ViewOperationSource.server, null);
     return v.contains(f);
@@ -127,6 +127,11 @@ class DefaultPersistenceManager implements PersistenceManager {
     } else {
       _trackedQueryManager.setQueryCompleteIfExists(query);
     }
+  }
+
+  @override
+  Map<int, TreeOperation> loadUserOperations() {
+    return storageLayer.loadUserOperations();
   }
 
   @override

@@ -37,18 +37,13 @@ class FirebaseStorageImpl extends FirebaseService implements FirebaseStorage {
   }
 
   @override
-  Duration get maxDownloadRetryTime {
-    // TODO: implement getMaxDownloadRetryTimeMillis
-    throw UnimplementedError();
-  }
+  Duration get maxDownloadRetryTime => httpClient.maxDownloadRetryTime;
 
   @override
-  Duration get maxOperationRetryTime =>
-      Duration(milliseconds: httpClient.maxUploadRetryTime.inMilliseconds);
+  Duration get maxOperationRetryTime => httpClient.maxOperationRetryTime;
 
   @override
-  Duration get maxUploadRetryTime =>
-      Duration(milliseconds: httpClient.maxUploadRetryTime.inMilliseconds);
+  Duration get maxUploadRetryTime => httpClient.maxUploadRetryTime;
 
   @override
   Reference refFromURL(String url) {
@@ -58,8 +53,7 @@ class FirebaseStorageImpl extends FirebaseService implements FirebaseStorage {
 
   @override
   void setMaxDownloadRetryTime(Duration time) {
-    // TODO: implement setMaxDownloadRetryTimeMillis
-    throw UnimplementedError();
+    httpClient.maxDownloadRetryTime = time;
   }
 
   @override

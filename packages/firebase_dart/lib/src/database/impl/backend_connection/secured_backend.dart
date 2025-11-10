@@ -77,13 +77,78 @@ class SecuredBackend extends Backend {
 
   @override
   Future<void> merge(String path, Map<String, dynamic> children) async {
-    // TODO check write rules and validate rules
+    // Check write rules and validate rules for merge operation
+    var root = RuleDataSnapshotFromBackend.root(unsecuredBackend);
+    var newDataRoot = RuleDataSnapshotFromBackend.root(unsecuredBackend);
+    
+    // Check write permissions for the path being merged
+    var canWrite = await securityTree
+        .canWrite(
+            root: root,
+            path: path,
+            auth: currentAuth,
+            newData: newDataRoot)
+        .first;
+    
+    if (!canWrite) {
+      throw FirebaseDatabaseException.permissionDenied();
+    }
+    
+    // Check validation rules for each child being merged
+    for (var childPath in children.keys) {
+      var fullPath = path.isEmpty ? childPath : '$path/$childPath';
+      var isValid = await securityTree
+          .validate(
+              root: root,
+              path: fullPath,
+              auth: currentAuth,
+              newData: newDataRoot,
+              data: root)
+          .first;
+      
+      if (!isValid) {
+        throw FirebaseDatabaseException.permissionDenied()
+            .replace(message: 'Validation failed for path: $fullPath');
+      }
+    }
+    
     await unsecuredBackend.merge(path, children);
   }
 
   @override
   Future<void> put(String path, value, {String? hash}) async {
-    // TODO check write rules and validate rules
+    // Check write rules and validate rules for put operation
+    var root = RuleDataSnapshotFromBackend.root(unsecuredBackend);
+    var newDataRoot = RuleDataSnapshotFromBackend.root(unsecuredBackend);
+    
+    // Check write permissions
+    var canWrite = await securityTree
+        .canWrite(
+            root: root,
+            path: path,
+            auth: currentAuth,
+            newData: newDataRoot)
+        .first;
+    
+    if (!canWrite) {
+      throw FirebaseDatabaseException.permissionDenied();
+    }
+    
+    // Check validation rules
+    var isValid = await securityTree
+        .validate(
+            root: root,
+            path: path,
+            auth: currentAuth,
+            newData: newDataRoot,
+            data: root)
+        .first;
+    
+    if (!isValid) {
+      throw FirebaseDatabaseException.permissionDenied()
+          .replace(message: 'Validation failed for path: $path');
+    }
+    
     await unsecuredBackend.put(path, value, hash: hash);
   }
 }

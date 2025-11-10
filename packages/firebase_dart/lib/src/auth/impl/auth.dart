@@ -525,13 +525,25 @@ class FirebaseAuthImpl extends FirebaseService
   }
 
   @override
-  // TODO: implement languageCode
-  String get languageCode => throw UnimplementedError();
+  String get languageCode => httpClient.locale ?? '';
 
   @override
-  Future<void> setPersistence(Persistence persistence) {
-    // TODO: implement setPersistence
-    throw UnimplementedError();
+  Future<void> setPersistence(Persistence persistence) async {
+    // setPersistence is primarily a web-only feature
+    // For non-web platforms, this is a no-op or may not be supported
+    // The persistence mode affects how auth state is stored (localStorage, sessionStorage, or in-memory)
+    // Since this is a pure Dart implementation, we don't have direct access to web storage APIs
+    // This could be implemented by the platform-specific implementation if needed
+    // For now, we'll throw an unsupported error for non-web platforms
+    var platform = Platform.current;
+    if (platform is! WebPlatform) {
+      throw FirebaseAuthException.unsupportedPersistence();
+    }
+    // For web, this would need to be implemented by the web-specific auth handler
+    // Since we're in pure Dart, we can't directly access localStorage/sessionStorage
+    // This would need to be handled by the platform implementation
+    throw UnimplementedError(
+        'setPersistence is not yet implemented. This requires platform-specific storage access.');
   }
 
   Future<UserCredential> signInWithMultiFactorAssertion(
@@ -621,9 +633,11 @@ class FirebaseAuthImpl extends FirebaseService
   }
 
   @override
-  Future<UserCredential> signInWithAuthProvider(AuthProvider provider) {
-    // TODO: implement signInWithAuthProvider
-    throw UnimplementedError();
+  Future<UserCredential> signInWithAuthProvider(AuthProvider provider) async {
+    // signInWithAuthProvider is similar to signInWithPopup but uses the default method
+    // It delegates to the auth handler to perform the sign-in
+    await _signIn(provider, true);
+    return getRedirectResult();
   }
 
   @override

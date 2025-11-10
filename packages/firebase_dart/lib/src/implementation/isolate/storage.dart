@@ -120,31 +120,32 @@ class IsolateFirebaseStorage extends IsolateFirebaseService
   @override
   String get bucket => _bucket.bucket;
 
-  @override
-  // TODO: implement maxDownloadRetryTime
-  Duration get maxDownloadRetryTime => throw UnimplementedError();
+  Duration _maxDownloadRetryTime = const Duration(minutes: 10);
+  Duration _maxOperationRetryTime = const Duration(minutes: 2);
+  Duration _maxUploadRetryTime = const Duration(minutes: 10);
 
   @override
-  // TODO: implement maxOperationRetryTime
-  Duration get maxOperationRetryTime => throw UnimplementedError();
+  Duration get maxDownloadRetryTime => _maxDownloadRetryTime;
 
   @override
-  // TODO: implement maxUploadRetryTime
-  Duration get maxUploadRetryTime => throw UnimplementedError();
+  Duration get maxOperationRetryTime => _maxOperationRetryTime;
+
+  @override
+  Duration get maxUploadRetryTime => _maxUploadRetryTime;
 
   @override
   void setMaxDownloadRetryTime(Duration time) {
-    // TODO: implement setMaxDownloadRetryTime
+    _maxDownloadRetryTime = time;
   }
 
   @override
   void setMaxOperationRetryTime(Duration time) {
-    // TODO: implement setMaxOperationRetryTime
+    _maxOperationRetryTime = time;
   }
 
   @override
   void setMaxUploadRetryTime(Duration time) {
-    // TODO: implement setMaxUploadRetryTime
+    _maxUploadRetryTime = time;
   }
 }
 

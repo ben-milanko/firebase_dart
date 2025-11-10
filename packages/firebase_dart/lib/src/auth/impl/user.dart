@@ -264,9 +264,80 @@ class FirebaseUserImpl extends User with DelegatingUserInfo {
   }
 
   @override
-  Future<UserCredential> linkWithCredential(AuthCredential credential) {
-    // TODO: implement linkWithCredential
-    throw UnimplementedError();
+  Future<UserCredential> linkWithCredential(AuthCredential credential) async {
+    _checkDestroyed();
+    
+    // Get the current user's ID token for linking
+    var idToken = await getIdToken();
+    
+    SignInResult signInResult;
+    
+    if (credential is PhoneAuthCredential) {
+      signInResult = await _rpcHandler.signInWithPhoneNumberForLinking(
+        sessionInfo: credential.verificationId,
+        code: credential.smsCode,
+        phoneNumber: credential.phoneNumber,
+        temporaryProof: credential.temporaryProof,
+        idToken: idToken,
+      );
+    } else if (credential is OAuthCredential) {
+      signInResult = await _rpcHandler.signInWithIdpForLinking(
+        idToken: idToken,
+        postBody: Uri(queryParameters: {
+          if (credential.idToken != null) 'id_token': credential.idToken,
+          if (credential.accessToken != null)
+            'access_token': credential.accessToken,
+          if (credential.secret != null)
+            'oauth_token_secret': credential.secret,
+          'providerId': credential.providerId,
+          if (credential.rawNonce != null) 'nonce': credential.rawNonce
+        }).query,
+        requestUri: 'http://localhost',
+      );
+    } else if (credential is EmailAuthCredential) {
+      if (credential.emailLink != null) {
+        var actionCodeUrl =
+            getActionCodeUrlFromSignInEmailLink(credential.emailLink!);
+        if (actionCodeUrl == null) {
+          throw FirebaseAuthException.argumentError('Invalid email link!');
+        }
+        signInResult = await _rpcHandler.signInWithEmailLinkForLinking(
+          idToken,
+          credential.email,
+          actionCodeUrl.code,
+        );
+      } else {
+        // Email/password linking is not directly supported via the linking API
+        // This would require a different approach (e.g., updating password)
+        throw FirebaseAuthException.operationNotAllowed();
+      }
+    } else if (credential is FirebaseAppAuthCredential) {
+      signInResult = await _rpcHandler.signInWithIdpForLinking(
+        idToken: idToken,
+        sessionId: credential.sessionId,
+        requestUri: credential.link,
+      );
+    } else {
+      throw UnimplementedError('Unsupported credential type for linking');
+    }
+    
+    // Update the user's credential with the linked account
+    await _updateCredential(signInResult.credential);
+    
+    // Get additional user info
+    var additionalUserInfo = createAdditionalUserInfo(
+      credential: signInResult.credential,
+      providerId: credential.providerId,
+      isNewUser: false,
+    );
+    
+    // Return UserCredential with link operation type
+    return UserCredentialImpl(
+      user: this,
+      credential: credential,
+      additionalUserInfo: additionalUserInfo,
+      operationType: UserCredentialImpl.operationTypeLink,
+    );
   }
 
   Future<SignInResult> _signInForExisting(AuthCredential credential) async {
@@ -511,16 +582,39 @@ class FirebaseUserImpl extends User with DelegatingUserInfo {
   String? get tenantId => _accountInfo.tenantId;
 
   @override
-  Future<void> updatePhoneNumber(PhoneAuthCredential phoneCredential) {
-    // TODO: implement updatePhoneNumber
-    throw UnimplementedError();
+  Future<void> updatePhoneNumber(PhoneAuthCredential phoneCredential) async {
+    _checkDestroyed();
+    
+    // Get the current user's ID token for updating phone number
+    var idToken = await getIdToken();
+    
+    // Use signInWithPhoneNumberForLinking to update the phone number
+    var signInResult = await _rpcHandler.signInWithPhoneNumberForLinking(
+      sessionInfo: phoneCredential.verificationId,
+      code: phoneCredential.smsCode,
+      phoneNumber: phoneCredential.phoneNumber,
+      temporaryProof: phoneCredential.temporaryProof,
+      idToken: idToken,
+    );
+    
+    // Update the user's credential with the new phone number
+    await _updateCredential(signInResult.credential);
   }
 
   @override
   Future<void> verifyBeforeUpdateEmail(String newEmail,
-      [ActionCodeSettings? actionCodeSettings]) {
-    // TODO: implement verifyBeforeUpdateEmail
-    throw UnimplementedError();
+      [ActionCodeSettings? actionCodeSettings]) async {
+    _checkDestroyed();
+    
+    // Get the current user's ID token
+    var idToken = await getIdToken();
+    
+    // Send verification email with VERIFY_AND_CHANGE_EMAIL request type
+    await _rpcHandler.sendVerifyBeforeUpdateEmail(
+      idToken: idToken,
+      newEmail: newEmail,
+      actionCodeSettings: actionCodeSettings,
+    );
   }
 
   void initializeProactiveRefresh() async {

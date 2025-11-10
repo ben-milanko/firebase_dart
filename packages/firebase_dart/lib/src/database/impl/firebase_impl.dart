@@ -235,6 +235,8 @@ class QueryImpl extends Query {
   final BaseFirebaseDatabase db;
   final QueryFilter filter;
   final Repo _repo;
+  bool _keepSynced = false;
+  StreamSubscription<Event>? _keepSyncedSubscription;
 
   QueryImpl._(this.db, this._path, this.filter) : _repo = Repo(db);
 
@@ -330,7 +332,25 @@ class QueryImpl extends Query {
 
   @override
   Future<void> keepSynced(bool value) async {
-    // TODO: implement keepSynced: do nothing for now
+    if (_keepSynced == value) return;
+    
+    _keepSynced = value;
+    
+    if (value) {
+      // Start maintaining an internal listener to keep the query synced
+      _keepSyncedSubscription = onValue.listen(
+        (_) {
+          // Keep the listener active, but don't do anything with the data
+        },
+        onError: (_) {
+          // Ignore errors in keepSynced listener
+        },
+      );
+    } else {
+      // Cancel the internal listener
+      await _keepSyncedSubscription?.cancel();
+      _keepSyncedSubscription = null;
+    }
   }
 }
 

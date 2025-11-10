@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:firebase_dart/implementation/pure_dart.dart';
 import 'package:firebase_dart/firestore.dart';
+import 'package:firebase_dart/implementation/pure_dart.dart';
+import 'package:firebase_dart/src/auth/auth.dart';
+import 'package:firebase_dart/src/core.dart';
 import 'package:firebase_dart/src/core/impl/app.dart';
 import 'package:firebase_dart/src/database.dart';
-import 'package:firebase_dart/src/core.dart';
-import 'package:firebase_dart/src/auth/auth.dart';
 import 'package:firebase_dart/src/database/impl/firebase_impl.dart';
 import 'package:firebase_dart/src/implementation.dart';
 import 'package:firebase_dart/src/storage.dart';
@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import '../database/impl/repo.dart';
 import 'isolate/auth.dart';
 import 'isolate/database.dart';
+import 'isolate/firestore.dart';
 import 'isolate/storage.dart';
 import 'isolate/util.dart';
 
@@ -152,9 +153,9 @@ class IsolateFirebaseImplementation extends BaseFirebaseImplementation {
   @override
   FirebaseFirestore createFirestore(IsolateFirebaseApp app,
       {String? databaseId}) {
-    // TODO: Implement isolate support for Firestore
-    throw UnsupportedError(
-        'Firestore is not yet supported in isolate mode. Use non-isolated mode instead.');
+    return FirebaseService.findService<IsolateFirebaseFirestore>(
+            app, (s) => s.databaseId == databaseId) ??
+        IsolateFirebaseFirestore(app: app, databaseId: databaseId);
   }
 }
 

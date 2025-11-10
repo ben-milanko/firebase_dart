@@ -41,6 +41,33 @@ class SecurityTree {
     });
   }
 
+  Stream<bool> canWrite(
+      {RuleDataSnapshot? root,
+      required String path,
+      Auth? auth,
+      RuleDataSnapshot? newData}) {
+    return CombineLatestStream<bool?, bool>(
+        _canWriteStreams(root: root, path: path, auth: auth, newData: newData),
+        (l) {
+      return l.any((element) => element ?? false);
+    });
+  }
+
+  Stream<bool> validate(
+      {RuleDataSnapshot? root,
+      required String path,
+      Auth? auth,
+      RuleDataSnapshot? newData,
+      RuleDataSnapshot? data}) {
+    return CombineLatestStream<bool?, bool>(
+        _validateStreams(
+            root: root, path: path, auth: auth, newData: newData, data: data),
+        (l) {
+      // All validation rules must pass (not just any)
+      return l.every((element) => element ?? true);
+    });
+  }
+
   bool isIndexed({required String path, required String child}) {
     var p = Name.parsePath(path);
     var node = root;
@@ -91,6 +118,95 @@ class SecurityTree {
           query: query);
     }
   }
+
+  Iterable<Stream<bool?>> _canWriteStreams(
+      {RuleDataSnapshot? root,
+      required String path,
+      Auth? auth,
+      RuleDataSnapshot? newData}) sync* {
+    var p = Name.parsePath(path);
+
+    var tree = this.root;
+
+    var data = root;
+    var newDataAtPath = newData;
+
+    var locations = <String, String>{};
+
+    yield tree.value.canWrite(
+        root: root, data: data, newData: newDataAtPath, auth: auth, locations: locations);
+    for (var n in p) {
+      var node = tree.children[n.asString()];
+      if (node == null) {
+        var l = tree.children.keys.firstWhereOrNull((v) => v.startsWith(r'$'));
+        if (!tree.children.containsKey(l)) {
+          return;
+        }
+        node = tree.children[l]!;
+        locations[l!] = n.asString();
+      }
+      tree = node;
+
+      data = data!.child(BehaviorSubject.seeded(n.asString()));
+      if (newDataAtPath != null) {
+        newDataAtPath = newDataAtPath.child(BehaviorSubject.seeded(n.asString()));
+      }
+
+      yield node.value.canWrite(
+          root: root,
+          data: data,
+          newData: newDataAtPath,
+          auth: auth,
+          locations: locations);
+    }
+  }
+
+  Iterable<Stream<bool?>> _validateStreams(
+      {RuleDataSnapshot? root,
+      required String path,
+      Auth? auth,
+      RuleDataSnapshot? newData,
+      RuleDataSnapshot? data}) sync* {
+    var p = Name.parsePath(path);
+
+    var tree = this.root;
+
+    var dataAtPath = data ?? root;
+    var newDataAtPath = newData;
+
+    var locations = <String, String>{};
+
+    yield tree.value.validateRule(
+        root: root,
+        data: dataAtPath,
+        newData: newDataAtPath,
+        auth: auth,
+        locations: locations);
+    for (var n in p) {
+      var node = tree.children[n.asString()];
+      if (node == null) {
+        var l = tree.children.keys.firstWhereOrNull((v) => v.startsWith(r'$'));
+        if (!tree.children.containsKey(l)) {
+          return;
+        }
+        node = tree.children[l]!;
+        locations[l!] = n.asString();
+      }
+      tree = node;
+
+      dataAtPath = dataAtPath!.child(BehaviorSubject.seeded(n.asString()));
+      if (newDataAtPath != null) {
+        newDataAtPath = newDataAtPath.child(BehaviorSubject.seeded(n.asString()));
+      }
+
+      yield node.value.validateRule(
+          root: root,
+          data: dataAtPath,
+          newData: newDataAtPath,
+          auth: auth,
+          locations: locations);
+    }
+  }
 }
 
 class SecurityNode {
@@ -117,6 +233,40 @@ class SecurityNode {
       'now': DateTime.now().millisecondsSinceEpoch,
       'auth': auth,
       'query': query,
+      ...locations
+    }) as Stream)
+        .cast<bool?>();
+  }
+
+  Stream<bool?> canWrite(
+      {RuleDataSnapshot? root,
+      RuleDataSnapshot? data,
+      RuleDataSnapshot? newData,
+      Auth? auth,
+      required Map<String, String> locations}) {
+    return (const _ExpressionEvaluator().eval(write, {
+      'root': root,
+      'data': data,
+      'newData': newData,
+      'now': DateTime.now().millisecondsSinceEpoch,
+      'auth': auth,
+      ...locations
+    }) as Stream)
+        .cast<bool?>();
+  }
+
+  Stream<bool?> validateRule(
+      {RuleDataSnapshot? root,
+      RuleDataSnapshot? data,
+      RuleDataSnapshot? newData,
+      Auth? auth,
+      required Map<String, String> locations}) {
+    return (const _ExpressionEvaluator().eval(validate, {
+      'root': root,
+      'data': data,
+      'newData': newData,
+      'now': DateTime.now().millisecondsSinceEpoch,
+      'auth': auth,
       ...locations
     }) as Stream)
         .cast<bool?>();

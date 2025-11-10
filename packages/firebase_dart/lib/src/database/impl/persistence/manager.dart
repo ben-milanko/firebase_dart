@@ -31,6 +31,11 @@ abstract class PersistenceManager {
 
   T runInTransaction<T>(T Function() callable);
 
+  /// Loads all persisted user operations.
+  ///
+  /// Returns an empty map if user operations cannot be loaded (e.g., for NoopPersistenceManager).
+  Map<int, TreeOperation> loadUserOperations();
+
   Future<void> close();
 }
 
@@ -82,6 +87,11 @@ class NoopPersistenceManager implements PersistenceManager {
   @override
   void setQueryComplete(QuerySpec query) {
     _verifyInsideTransaction();
+  }
+
+  @override
+  Map<int, TreeOperation> loadUserOperations() {
+    return {};
   }
 
   @override
@@ -146,6 +156,11 @@ class DelegatingPersistenceManager implements PersistenceManager {
   @override
   void setQueryInactive(QuerySpec query) {
     return delegateTo.setQueryInactive(query);
+  }
+
+  @override
+  Map<int, TreeOperation> loadUserOperations() {
+    return delegateTo.loadUserOperations();
   }
 
   @override

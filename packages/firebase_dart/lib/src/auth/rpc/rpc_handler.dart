@@ -508,6 +508,22 @@ class RpcHandler {
     return passwordProvider?.email ?? accountInfo.email;
   }
 
+  /// Requests getOobCode endpoint for verify and change email.
+  ///
+  /// Sends a verification email to the new email address. The user's email will
+  /// be updated to the new one after being verified.
+  Future<void> sendVerifyBeforeUpdateEmail(
+      {required String idToken,
+      required String newEmail,
+      ActionCodeSettings? actionCodeSettings}) async {
+    _validateEmail(newEmail);
+    await identitytoolkitApi.accounts
+        .sendOobCode(_createGetOobCodeRequest(actionCodeSettings)
+          ..requestType = 'VERIFY_AND_CHANGE_EMAIL'
+          ..idToken = idToken
+          ..newEmail = newEmail);
+  }
+
   /// Requests resetPassword endpoint for password reset.
   ///
   /// Returns future that resolves with user's email.

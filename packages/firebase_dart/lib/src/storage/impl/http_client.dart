@@ -11,12 +11,16 @@ class HttpClient extends http.BaseClient {
   /// The timeout for upload.
   static const defaultMaxUploadRetryTime = Duration(minutes: 10);
 
+  /// The timeout for download.
+  static const defaultMaxDownloadRetryTime = Duration(minutes: 10);
+
   final http.Client baseClient;
 
   final AuthProvider getAuthToken;
 
   Duration maxOperationRetryTime = defaultMaxOperationRetryTime;
   Duration maxUploadRetryTime = defaultMaxUploadRetryTime;
+  Duration maxDownloadRetryTime = defaultMaxDownloadRetryTime;
 
   HttpClient(
     this.baseClient,

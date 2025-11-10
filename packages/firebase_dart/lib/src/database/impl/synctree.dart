@@ -51,6 +51,9 @@ class MasterView {
 
   QueryRegistrationState? _parentState;
 
+  final PersistenceManager? persistenceManager;
+  final Path<Name>? path;
+
   QueryRegistrationState get state => _state;
 
   set state(QueryRegistrationState v) {
@@ -71,13 +74,14 @@ class MasterView {
 
   final Map<QueryFilter, EventTarget> observers = {};
 
-  MasterView(this.masterFilter, {this.debugName})
+  MasterView(this.masterFilter,
+      {this.debugName, this.persistenceManager, this.path})
       : _data = ViewCache(IncompleteData.empty(masterFilter),
             IncompleteData.empty(masterFilter));
 
-  MasterView withFilter(QueryFilter filter) =>
-      MasterView(filter, debugName: debugName)
-        .._data = _data.withFilter(filter);
+  MasterView withFilter(QueryFilter filter) => MasterView(filter,
+      debugName: debugName, persistenceManager: persistenceManager, path: path)
+    .._data = _data.withFilter(filter);
 
   ViewCache get data => _data;
 
@@ -218,11 +222,18 @@ class MasterView {
       // As the operation was successful, we will apply it to the current view we have of the server.
       // If the server value is different, we will receive the correct value when the query is registered.
       // We cannot do this if the state is registering or unregistering, as we cannot be sure wether or not we already received the updated value and therefore cannot assume we will receive a correction later.
-      // TODO: this does not update the persistent storage
+      // Apply the operation to the server view and update persistent storage
       var operation = _data.pendingOperations[writeId];
       if (operation != null) {
         _data =
             _data.applyOperation(operation, ViewOperationSource.server, null);
+        // Update persistent storage to reflect the server operation
+        if (persistenceManager != null && path != null) {
+          persistenceManager!.runInTransaction(() {
+            persistenceManager!
+                .updateServerCache(QuerySpec(path!, masterFilter), operation);
+          });
+        }
       }
     }
     _data = _data.applyOperation(operation, source, writeId);
@@ -266,7 +277,11 @@ class SyncPoint {
       {ViewCache? data, required this.persistenceManager}) {
     if (data == null) return;
     var q = QueryFilter();
-    views[q] = MasterView(q, debugName: debugName).._data = data;
+    views[q] = MasterView(q,
+        debugName: debugName,
+        persistenceManager: persistenceManager,
+        path: path)
+      .._data = data;
   }
 
   SyncPoint child(Name child) {
@@ -477,11 +492,22 @@ class SyncPoint {
         .serverCache(QuerySpec(path, filter))
         .withFilter(filter);
     var cache = ViewCache(serverVersion, serverVersion);
+    // Apply in-memory pending operations
     for (var op in pendingOperations.entries) {
       cache = cache.applyOperation(op.value, ViewOperationSource.user, op.key);
     }
-    // TODO: apply user operations from persistence storage
-    return views[filter] = MasterView(filter, debugName: debugName)
+    // Apply user operations from persistence storage that aren't already in pendingOperations
+    var persistedOperations = persistenceManager.loadUserOperations();
+    for (var op in persistedOperations.entries) {
+      if (!pendingOperations.containsKey(op.key)) {
+        cache =
+            cache.applyOperation(op.value, ViewOperationSource.user, op.key);
+      }
+    }
+    return views[filter] = MasterView(filter,
+        debugName: debugName,
+        persistenceManager: persistenceManager,
+        path: path)
       .._data = cache;
   }
 
