@@ -67,8 +67,7 @@ class RecaptchaVerifierImpl implements RecaptchaVerifier {
       var parentElement = container == null
           ? web.document.body!
           : web.document.getElementById(container!) as web.HTMLElement;
-      var guaranteedEmpty = web.HTMLDivElement()
-        ..id = 'recaptcha';
+      var guaranteedEmpty = web.HTMLDivElement()..id = 'recaptcha';
       parentElement.appendChild(guaranteedEmpty);
       _element = guaranteedEmpty;
 
