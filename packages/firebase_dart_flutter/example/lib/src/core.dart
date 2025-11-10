@@ -6,6 +6,7 @@ import 'package:firebase_dart/firebase_dart.dart';
 
 import 'auth.dart';
 import 'database.dart';
+import 'firestore.dart';
 
 class AppListPage extends StatelessWidget {
   static Stream<List<FirebaseOptions>> apps() async* {
@@ -317,7 +318,7 @@ class _AppPageState extends State<AppPage> {
     }
 
     return DefaultTabController(
-        length: 4,
+        length: 5,
         child: Scaffold(
           appBar: AppBar(
             title: Text(widget.projectId),
@@ -326,6 +327,7 @@ class _AppPageState extends State<AppPage> {
                 Text('settings'),
                 Text('auth'),
                 Text('database'),
+                Text('firestore'),
                 Text('storage'),
               ],
             ),
@@ -335,6 +337,7 @@ class _AppPageState extends State<AppPage> {
               AppSettingsTab(app: app),
               AuthTab(app: app),
               DatabaseTab(app: app),
+              FirestoreTab(app: app),
               const Text('storage'),
             ],
           ),

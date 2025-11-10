@@ -4,12 +4,11 @@ import 'package:firebase_dart/src/implementation.dart';
 import 'package:firebase_dart/src/implementation/dart.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
-
 import 'package:jose/jose.dart';
 import 'package:web/web.dart' as web;
 
 bool _isMobile() {
-  final navigatorPlatform = web.window.navigator.platform?.toLowerCase() ?? '';
+  final navigatorPlatform = web.window.navigator.platform.toLowerCase();
   if (navigatorPlatform.startsWith('mac')) {
     return false;
   }
