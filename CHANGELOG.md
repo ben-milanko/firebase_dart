@@ -3,6 +3,116 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-01-28
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`firebase_dart` - `v1.5.5`](#firebase_dart---v155)
+ - [`firebase_dart_flutter` - `v1.3.7`](#firebase_dart_flutter---v137)
+ - [`firebase_dart_flutter_auth_google` - `v0.1.0+8`](#firebase_dart_flutter_auth_google---v0108)
+ - [`firebase_dart_flutter_auth_facebook` - `v0.0.1+8`](#firebase_dart_flutter_auth_facebook---v0018)
+ - [`firebase_dart_flutter_auth_apple` - `v0.0.1+8`](#firebase_dart_flutter_auth_apple---v0018)
+ - [`firebase_dart_plus` - `v0.1.0+28`](#firebase_dart_plus---v01028)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `firebase_dart_flutter` - `v1.3.7`
+ - `firebase_dart_flutter_auth_google` - `v0.1.0+8`
+ - `firebase_dart_flutter_auth_facebook` - `v0.0.1+8`
+ - `firebase_dart_flutter_auth_apple` - `v0.0.1+8`
+ - `firebase_dart_plus` - `v0.1.0+28`
+
+---
+
+#### `firebase_dart` - `v1.5.5`
+
+ - **FIX**: bug in version 1.5.4 in RTDB preventing certain queries to receive data. ([53a11277](https://github.com/appsup-dart/firebase_dart/commit/53a112777d4fe2806aad73dc081750784810b29b))
+
+
+## 2026-01-27
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`firebase_dart` - `v1.5.4`](#firebase_dart---v154)
+ - [`firebase_dart_flutter` - `v1.3.6`](#firebase_dart_flutter---v136)
+ - [`firebase_dart_flutter_auth_google` - `v0.1.0+7`](#firebase_dart_flutter_auth_google---v0107)
+ - [`firebase_dart_flutter_auth_facebook` - `v0.0.1+7`](#firebase_dart_flutter_auth_facebook---v0017)
+ - [`firebase_dart_flutter_auth_apple` - `v0.0.1+7`](#firebase_dart_flutter_auth_apple---v0017)
+ - [`firebase_dart_plus` - `v0.1.0+27`](#firebase_dart_plus---v01027)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `firebase_dart_flutter` - `v1.3.6`
+ - `firebase_dart_flutter_auth_google` - `v0.1.0+7`
+ - `firebase_dart_flutter_auth_facebook` - `v0.0.1+7`
+ - `firebase_dart_flutter_auth_apple` - `v0.0.1+7`
+ - `firebase_dart_plus` - `v0.1.0+27`
+
+---
+
+#### `firebase_dart` - `v1.5.4`
+
+ - **PERF**: better performance when many queries on sibling paths. ([4515957c](https://github.com/appsup-dart/firebase_dart/commit/4515957cba6f22ce27d4a17f9d53f5ca5beca0d0))
+ - **FIX**: avoid notifying observers when not in-sync and persistence disabled. ([6cc3ea32](https://github.com/appsup-dart/firebase_dart/commit/6cc3ea329fbc3bc0ad549c861a3e1de44d50be4a))
+
+
+## 2025-10-07
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`firebase_dart` - `v1.5.3`](#firebase_dart---v153)
+ - [`firebase_dart_flutter` - `v1.3.5`](#firebase_dart_flutter---v135)
+ - [`firebase_dart_flutter_auth_google` - `v0.1.0+6`](#firebase_dart_flutter_auth_google---v0106)
+ - [`firebase_dart_flutter_auth_facebook` - `v0.0.1+6`](#firebase_dart_flutter_auth_facebook---v0016)
+ - [`firebase_dart_flutter_auth_apple` - `v0.0.1+6`](#firebase_dart_flutter_auth_apple---v0016)
+ - [`firebase_dart_plus` - `v0.1.0+26`](#firebase_dart_plus---v01026)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `firebase_dart_flutter` - `v1.3.5`
+ - `firebase_dart_flutter_auth_google` - `v0.1.0+6`
+ - `firebase_dart_flutter_auth_facebook` - `v0.0.1+6`
+ - `firebase_dart_flutter_auth_apple` - `v0.0.1+6`
+ - `firebase_dart_plus` - `v0.1.0+26`
+
+---
+
+#### `firebase_dart` - `v1.5.3`
+
+ - **REFACTOR**: migrate to dart:js_interop. ([e19c0b09](https://github.com/appsup-dart/firebase_dart/commit/e19c0b09e26b76d170dec0df68a5983778de12d5))
+ - **FIX**(database): unlisten when not connected prevents subsequent listens for same query. ([6821849f](https://github.com/appsup-dart/firebase_dart/commit/6821849ff7727f9e9f4688aba8947a986f3729a6))
+
+
 ## 2025-09-20
 
 ### Changes

@@ -50,24 +50,31 @@ class MasterView {
   QueryRegistrationState _state = QueryRegistrationState.unregistered;
 
   QueryRegistrationState? _parentState;
-
-  final PersistenceManager? persistenceManager;
-  final Path<Name>? path;
+  QueryRegistrationState? _unlimitingSiblingState;
 
   QueryRegistrationState get state => _state;
+
+  final bool persistenceEnabled;
 
   set state(QueryRegistrationState v) {
     if (_state == v) return;
 
     _state = v;
+    for (var q in observers.keys) {
+      var t = observers[q]!;
+
+      var newValue = _valueForFilter(q);
+      t.notifyDataChanged(newValue);
+    }
   }
 
   QueryRegistrationState get effectiveState {
-    if (_parentState == null) return _state;
-    if (Comparable.compare(_parentState!, _state) > 0) {
-      return _parentState!;
-    }
-    return _state;
+    var states = [
+      if (_parentState != null) _parentState!,
+      if (_unlimitingSiblingState != null) _unlimitingSiblingState!,
+      _state,
+    ];
+    return states.reduce((a, b) => a.compareTo(b) > 0 ? a : b);
   }
 
   bool get isInSync => effectiveState == QueryRegistrationState.registered;
@@ -75,12 +82,12 @@ class MasterView {
   final Map<QueryFilter, EventTarget> observers = {};
 
   MasterView(this.masterFilter,
-      {this.debugName, this.persistenceManager, this.path})
+      {this.debugName, required this.persistenceEnabled})
       : _data = ViewCache(IncompleteData.empty(masterFilter),
             IncompleteData.empty(masterFilter));
 
   MasterView withFilter(QueryFilter filter) => MasterView(filter,
-      debugName: debugName, persistenceManager: persistenceManager, path: path)
+      debugName: debugName, persistenceEnabled: persistenceEnabled)
     .._data = _data.withFilter(filter);
 
   ViewCache get data => _data;
@@ -167,7 +174,7 @@ class MasterView {
     if (!contains(filter)) return false;
     observers
         .putIfAbsent(filter, () => EventTarget())
-        .addEventListener(type, listener, _data.valueForFilter(filter));
+        .addEventListener(type, listener, _valueForFilter(filter));
 
     return true;
   }
@@ -175,7 +182,7 @@ class MasterView {
   void adoptEventTarget(QueryFilter filter, EventTarget target) {
     assert(observers[filter] == null);
     observers[filter] = target;
-    target.notifyDataChanged(_data.valueForFilter(filter));
+    target.notifyDataChanged(_valueForFilter(filter));
   }
 
   /// Removes the event listener.
@@ -222,18 +229,11 @@ class MasterView {
       // As the operation was successful, we will apply it to the current view we have of the server.
       // If the server value is different, we will receive the correct value when the query is registered.
       // We cannot do this if the state is registering or unregistering, as we cannot be sure wether or not we already received the updated value and therefore cannot assume we will receive a correction later.
-      // Apply the operation to the server view and update persistent storage
+      // Apply the operation to the server view
       var operation = _data.pendingOperations[writeId];
       if (operation != null) {
         _data =
             _data.applyOperation(operation, ViewOperationSource.server, null);
-        // Update persistent storage to reflect the server operation
-        if (persistenceManager != null && path != null) {
-          persistenceManager!.runInTransaction(() {
-            persistenceManager!
-                .updateServerCache(QuerySpec(path!, masterFilter), operation);
-          });
-        }
       }
     }
     _data = _data.applyOperation(operation, source, writeId);
@@ -248,10 +248,17 @@ class MasterView {
     for (var q in observers.keys) {
       var t = observers[q]!;
 
-      var newValue = _data.valueForFilter(q);
+      var newValue = _valueForFilter(q);
       t.notifyDataChanged(newValue);
     }
     return out;
+  }
+
+  IncompleteData _valueForFilter(QueryFilter filter) {
+    if (!persistenceEnabled && !isInSync) {
+      return IncompleteData.empty();
+    }
+    return _data.valueForFilter(filter);
   }
 }
 
@@ -278,9 +285,7 @@ class SyncPoint {
     if (data == null) return;
     var q = QueryFilter();
     views[q] = MasterView(q,
-        debugName: debugName,
-        persistenceManager: persistenceManager,
-        path: path)
+        debugName: debugName, persistenceEnabled: persistenceManager.isEnabled)
       .._data = data;
   }
 
@@ -306,6 +311,9 @@ class SyncPoint {
         var defView = views[const QueryFilter()]!;
         if (!defView.observers.containsKey(const QueryFilter())) {
           views.remove(const QueryFilter());
+          for (var v in views.values) {
+            v._unlimitingSiblingState = null;
+          }
           for (var k in defView.observers.keys.toList()) {
             var view = getMasterViewForFilter(k);
             view.adoptEventTarget(k, defView.observers.remove(k)!);
@@ -505,9 +513,7 @@ class SyncPoint {
       }
     }
     return views[filter] = MasterView(filter,
-        debugName: debugName,
-        persistenceManager: persistenceManager,
-        path: path)
+        debugName: debugName, persistenceEnabled: persistenceManager.isEnabled)
       .._data = cache;
   }
 
@@ -526,7 +532,9 @@ class SyncPoint {
 
   /// Applies an operation to the view for [filter] at this [SyncPoint] or all
   /// views when [filter] is `null`.
-  void applyOperation(TreeOperation operation, QueryFilter? filter,
+  ///
+  /// Returns true when the operation was applied to at least one view.
+  bool applyOperation(TreeOperation operation, QueryFilter? filter,
       ViewOperationSource source, int? writeId) {
     if (source == ViewOperationSource.user) {
       pendingOperations[writeId!] = operation;
@@ -534,6 +542,7 @@ class SyncPoint {
       pendingOperations.remove(writeId);
     }
     if (filter == null || filter == const QueryFilter()) {
+      if (views.isEmpty) return false;
       if (source == ViewOperationSource.server) {
         if (operation.mayUpgrade && operation.path.isEmpty) {
           if (views.isNotEmpty &&
@@ -557,31 +566,37 @@ class SyncPoint {
           _newQueries[q] = d[q]!;
         }
       }
+      return true;
     } else {
-      var d = views[filter]?.applyOperation(operation, source, writeId);
-      if (d != null) {
-        for (var q in d.keys) {
-          _newQueries[q] = d[q]!;
-        }
+      var view = views[filter];
+      if (view == null) return false;
+      var d = view.applyOperation(operation, source, writeId);
+      for (var q in d.keys) {
+        _newQueries[q] = d[q]!;
       }
+      return true;
     }
   }
 
   @override
   String toString() => 'SyncPoint[$debugName]';
 
-  void applyUpgrade(QueryFilter filter) {
+  bool applyUpgrade(QueryFilter filter) {
     var masterView = views[filter];
-    if (masterView == null) return;
+    if (masterView == null) return false;
+
+    var appliedOnViews = false;
     for (var v in views.values) {
       if (v == masterView) continue;
       if (v.masterFilter == const QueryFilter()) continue;
 
+      appliedOnViews = true;
       for (var e in v.observers.entries) {
         masterView.adoptEventTarget(e.key, e.value);
       }
     }
     views.removeWhere((k, v) => k != const QueryFilter() && v != masterView);
+    return appliedOnViews;
   }
 
   /// Removes all observers that do not have any listeners since [from].
@@ -1031,6 +1046,11 @@ class SyncTree {
     if (v != null && v.observers.isEmpty) {
       if (!point.isCompleteFromParent || filter != const QueryFilter()) {
         point.views.remove(filter);
+        if (filter == const QueryFilter()) {
+          for (var v in point.views.values) {
+            v._unlimitingSiblingState = null;
+          }
+        }
       }
     }
   }
@@ -1042,7 +1062,26 @@ class SyncTree {
     var point = node.value;
     if (point.views[filter]?._state == state) return;
 
+    if (point.views[filter]?.state != QueryRegistrationState.registering &&
+        state == QueryRegistrationState.registered) {
+      // We received a confirmation that the query is registered, but we already
+      // started to unregister it. We keep the current state.
+      return;
+    }
+
+    if (point.views[filter]?.state != QueryRegistrationState.unregistering &&
+        state == QueryRegistrationState.unregistered) {
+      // We received a confirmation that the query is unregistered, but we already
+      // started to register it. We keep the current state.
+      return;
+    }
+
     point.views[filter]?.state = state;
+    if (!filter.limits) {
+      for (var v in point.views.values) {
+        v._unlimitingSiblingState = state;
+      }
+    }
     switch (state) {
       case QueryRegistrationState.registered:
         applyAckListen(path, filter);
@@ -1054,7 +1093,7 @@ class SyncTree {
       case QueryRegistrationState.registering:
         break;
     }
-    _invalidate(path);
+    _invalidate(path, stateChanged: true);
   }
 
   void handleInvalidPaths() {
@@ -1086,20 +1125,24 @@ class SyncTree {
     _handleInvalidPointsFuture = null;
   }
 
-  void _invalidate(Path<Name> path) {
+  void _invalidate(Path<Name> path, {bool stateChanged = false}) {
     assert(!_isDestroyed);
-    var node = root.subtree(path, _createNode);
-    var point = node.value;
 
-    var children = node.children;
-    for (var child in children.keys) {
-      var v = children[child]!;
+    if (stateChanged) {
+      var node = root.subtree(path, _createNode);
+      var point = node.value;
 
-      var newStateFromParent = point.registrationStateForChild(child);
+      var children = node.children;
+      for (var e in children.entries) {
+        var child = e.key;
+        var v = e.value;
 
-      if (v.value._parentState != newStateFromParent) {
-        v.value.parentState = newStateFromParent;
-        _invalidate(path.child(child));
+        var newStateFromParent = point.registrationStateForChild(child);
+
+        if (v.value._parentState != newStateFromParent) {
+          v.value.parentState = newStateFromParent;
+          _invalidate(path.child(child), stateChanged: stateChanged);
+        }
       }
     }
 
@@ -1110,12 +1153,12 @@ class SyncTree {
   }
 
   Future<void> _doOnSyncPoint(
-      Path<Name> path, void Function(SyncPoint point) action) {
+      Path<Name> path, bool Function(SyncPoint point) action) {
     var point = root.subtree(path, _createNode).value;
 
-    action(point);
+    var applied = action(point);
 
-    _invalidate(path);
+    _invalidate(path, stateChanged: applied);
 
     return _handleInvalidPointsFuture!;
   }
@@ -1134,6 +1177,7 @@ class SyncTree {
     assert(!_isDestroyed);
     return _doOnSyncPoint(path, (point) {
       point.addEventListener(type, filter, listener);
+      return false;
     });
   }
 
@@ -1148,6 +1192,7 @@ class SyncTree {
         _pathsWithEmptyObservers[path] ??= _clock.now();
         _pruneObservers();
       }
+      return false;
     });
   }
 
@@ -1186,6 +1231,11 @@ class SyncTree {
     var view = point.views.remove(filter);
 
     if (view == null) return;
+    if (filter == const QueryFilter()) {
+      for (var v in point.views.values) {
+        v._unlimitingSiblingState = null;
+      }
+    }
 
     var filtersToRemove = filter.limits
         ? [filter]

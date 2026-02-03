@@ -5,11 +5,9 @@ library;
 
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:math';
-
-import 'package:js/js.dart' as js;
-import 'package:web/web.dart' as web;
-
+import 'package:web/web.dart';
 import 'gapi.dart' as gapi;
 import 'gapi_iframes.dart' as gapi;
 import 'gapi_iframes.dart';
@@ -17,26 +15,6 @@ import 'util.dart' as util;
 
 @JS('window')
 external JSObject get _jsWindow;
-
-// Helper function to set JS properties using dart:js_interop
-@JS('Object.assign')
-external void _jsObjectAssign(JSObject target, JSObject source);
-
-void _setJSProperty(JSObject obj, String name, JSAny value) {
-  // Use JS interop to set property by creating a temporary object
-  final temp = <String, JSAny>{name: value}.jsify() as JSObject;
-  _jsObjectAssign(obj, temp);
-}
-
-// Helper function to convert IThenable to Dart Future
-Future<T> _promiseToFuture<T>(gapi.IThenable thenable) {
-  final completer = Completer<T>();
-  thenable.then(
-    js.allowInterop((value) => completer.complete(value as T)),
-    js.allowInterop((error) => completer.completeError(error)),
-  );
-  return completer.future;
-}
 
 /// Defines the hidden iframe wrapper for cross origin communications.
 class IframeWrapper {
@@ -58,38 +36,40 @@ class IframeWrapper {
     return IframeWrapper._loadGApiJs().then((_) {
       var completer = Completer<void>();
 
-      var container = web.HTMLDivElement();
-      web.document.body!.appendChild(container);
+      var container = HTMLDivElement();
+      document.body!.append(container);
       gapi.getContext().open(
-          gapi.IframeOptions(
-              where: container,
-              url: url,
-              messageHandlersFilter: gapi.CROSS_ORIGIN_IFRAMES_FILTER,
-              attributes: gapi.IframeAttributes(
-                  style: (web.document.createElement('div') as web.HTMLElement).style
-                    ..position = 'absolute'
-                    ..top = '-100px'
-                    ..width = '1px'
-                    ..height = '1px'),
-              dontclear: true), js.allowInterop(
-        (iframe) {
-          _iframe = iframe;
-          _iframe.restyle(gapi.IframeRestyleOptions(
-              // Prevent iframe from closing on mouse out.
-              setHideOnLeave: false));
+            gapi.IframeOptions(
+                where: container,
+                url: url,
+                messageHandlersFilter: gapi.CROSS_ORIGIN_IFRAMES_FILTER,
+                attributes: gapi.IframeAttributes(
+                    style: HTMLDivElement().style
+                      ..position = 'absolute'
+                      ..top = '-100px'
+                      ..width = '1px'
+                      ..height = '1px'),
+                dontclear: true),
+            (Iframe iframe) {
+              _iframe = iframe;
+              _iframe.restyle(gapi.IframeRestyleOptions(
+                  // Prevent iframe from closing on mouse out.
+                  setHideOnLeave: false));
 
-          // This returns an IThenable. However the reject part does not call
-          // when the iframe is not loaded.
-          _promiseToFuture<void>(iframe.ping())
-              // Confirm iframe is correctly loaded.
-              // To fallback on failure, set a timeout.
-              .timeout(PING_TIMEOUT_.get())
-              .then((_) => completer.complete(), onError: (error) {
-            completer.completeError(Exception('Network Error'));
-          });
-        },
-      ));
-      return completer.future.then((_) => print('completed'));
+              // This returns an IThenable. However the reject part does not call
+              // when the iframe is not loaded.
+              iframe
+                  .ping()
+                  .toFuture()
+                  // Confirm iframe is correctly loaded.
+                  // To fallback on failure, set a timeout.
+                  .timeout(PING_TIMEOUT_.get())
+                  .then((_) => completer.complete(), onError: (error) {
+                completer.completeError(Exception('Network Error'));
+              });
+            }.toJS,
+          );
+      return completer.future;
     });
   }
 
@@ -97,7 +77,12 @@ class IframeWrapper {
     return _onIframeOpen.then((_) {
       var completer = Completer<Map<String, dynamic>?>();
 
-      _iframe.send(message.type, message, js.allowInterop(completer.complete),
+      _iframe.send(
+          message.type,
+          message,
+          () {
+            completer.complete();
+          }.toJS,
           gapi.CROSS_ORIGIN_IFRAMES_FILTER);
       return completer.future;
     });
@@ -107,11 +92,10 @@ class IframeWrapper {
   void registerEvent(String eventName,
       IframeEventHandlerResponse Function(IframeEvent) handler) {
     _onIframeOpen.then((_) {
-      var h = _handlers[handler] ??= (event, iframe) {
+      var h = _handlers[handler] ??= (IframeEvent event, Iframe iframe) {
         return handler(event);
-      };
-      _iframe.register(
-          eventName, js.allowInterop(h), gapi.CROSS_ORIGIN_IFRAMES_FILTER);
+      }.toJS;
+      _iframe.register(eventName, h, gapi.CROSS_ORIGIN_IFRAMES_FILTER);
     });
   }
 
@@ -120,7 +104,7 @@ class IframeWrapper {
   /// Unregisters a listener to a post message.
   void unregisterEvent(String eventName, Function(dynamic) handler) {
     _onIframeOpen.then((_) {
-      _iframe.unregister(eventName, js.allowInterop(_handlers[handler]!));
+      _iframe.unregister(eventName, _handlers[handler]!);
     });
   }
 
@@ -159,8 +143,10 @@ class IframeWrapper {
         gapi.load(
             'gapi.iframes',
             gapi.LoadConfig(
-                callback: js.allowInterop(completer.complete),
-                ontimeout: js.allowInterop(() {
+                callback: () {
+                  completer.complete();
+                }.toJS,
+                ontimeout: () {
                   // The above reset may be sufficient, but having this reset after
                   // failure ensures that if the developer calls gapi.load after the
                   // connection is re-established and before another attempt to embed
@@ -169,7 +155,7 @@ class IframeWrapper {
                   // Timeout when gapi.iframes.Iframe not loaded.
                   // TODO: fireauth.util.resetUnloadedGapiModules();
                   completer.completeError(Exception('Network Error'));
-                }),
+                }.toJS,
                 timeout: 30000));
       }
 
@@ -187,23 +173,23 @@ class IframeWrapper {
         // timeout.
         var cbName = '__iframefcb${_random.nextInt(1000000)}';
         // GApi loader not available, dynamically load platform.js.
-        // Set callback on window using JS interop helper
-        final callback = js.allowInterop(() {
-          // GApi loader should be ready.
-          if (util.getObjectRef('gapi.load') != null) {
-            onGapiLoad();
-          } else {
-            // Gapi loader failed, throw error.
-            completer.completeError(Exception('Network Error'));
-          }
-        });
-        _setJSProperty(_jsWindow, cbName, callback.toJS);
+        globalContext.setProperty(
+            cbName.toJS,
+            () {
+              // GApi loader should be ready.
+              if (util.getObjectRef('gapi.load') != null) {
+                onGapiLoad();
+              } else {
+                // Gapi loader failed, throw error.
+                completer.completeError(Exception('Network Error'));
+              }
+            }.toJS);
         // Build GApi loader.
         var url = Uri.parse(IframeWrapper.GAPI_LOADER_SRC_)
             .replace(queryParameters: {'onload': cbName});
         // Load GApi loader.
-        var script = web.HTMLScriptElement()..src = url.toString();
-        web.document.body!.appendChild(script);
+        var script = HTMLScriptElement()..src = url.toString();
+        document.body!.append(script);
       }
 
       return completer.future;
@@ -215,8 +201,10 @@ class IframeWrapper {
   }
 }
 
-class Message {
-  final String type;
+@JS()
+@anonymous
+extension type Message._(JSObject _) implements JSObject {
+  external String get type;
 
-  Message({required this.type});
+  external factory Message({required String type});
 }
