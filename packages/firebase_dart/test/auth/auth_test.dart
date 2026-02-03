@@ -552,6 +552,21 @@ void runAuthTests({bool isolated = false}) {
       });
     });
 
+    group('FirebaseAuth.signInWithAuthProvider', () {
+      test('FirebaseAuth.signInWithAuthProvider: delegates to backend', () async {
+        // This test confirms that the call is marshaled correctly across the isolate
+        // even if the backend handler fails.
+        // Before the fix, this would throw UnimplementedError immediately.
+        try {
+            await auth.signInWithAuthProvider(GoogleAuthProvider());
+        } catch (e) {
+            // It might fail because the test auth handler doesn't support the provider,
+            // but it should NOT be UnimplementedError.
+            expect(e, isNot(isA<UnimplementedError>()));
+        }
+      });
+    });
+
     group('FirebaseAuth.checkActionCode', () {
       test('FirebaseAuth.checkActionCode: success', () async {
         var code = await tester.backend

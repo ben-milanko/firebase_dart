@@ -6,6 +6,8 @@ class SecuredBackend extends Backend {
 
   final Backend unsecuredBackend;
 
+  final List<_ListenerRegistration> _registrations = [];
+
   SecuredBackend.from(this.unsecuredBackend);
 
   SecurityTree get securityTree => _securityTree.value;
@@ -26,7 +28,7 @@ class SecuredBackend extends Backend {
     var completer = Completer();
 
     var root = RuleDataSnapshotFromBackend.root(unsecuredBackend);
-    _securityTree
+    var subscription = _securityTree
         .switchMap((v) =>
             v.canRead(auth: currentAuth, path: path, root: root, query: query))
         .listen((canRead) {
@@ -44,7 +46,9 @@ class SecuredBackend extends Backend {
           completer.complete();
         }
       }
-    }); // TODO cancel subscription on unlisten
+    });
+    _registrations
+        .add(_ListenerRegistration(path, query, listener, subscription));
     await completer.future;
 
     var warnings = <String>[];
@@ -72,6 +76,17 @@ class SecuredBackend extends Backend {
         query = const QueryFilter();
       }
     }
+
+    _registrations.removeWhere((reg) {
+      if (reg.path == path &&
+          reg.query == query &&
+          (listener == null || reg.listener == listener)) {
+        reg.subscription.cancel();
+        return true;
+      }
+      return false;
+    });
+
     await unsecuredBackend.unlisten(path, listener, query: query);
   }
 
@@ -155,4 +170,13 @@ class SecuredBackend extends Backend {
 
 class UpgradeEvent extends Event {
   UpgradeEvent() : super('upgrade');
+}
+
+class _ListenerRegistration {
+  final String path;
+  final QueryFilter query;
+  final EventListener listener;
+  final StreamSubscription subscription;
+
+  _ListenerRegistration(this.path, this.query, this.listener, this.subscription);
 }

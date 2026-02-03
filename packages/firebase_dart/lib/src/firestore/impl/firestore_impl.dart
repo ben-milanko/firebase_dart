@@ -5,6 +5,7 @@ import 'package:firebase_dart/firestore.dart';
 import 'package:firebase_dart/src/core/impl/app.dart';
 import 'package:firebase_dart/src/implementation.dart';
 
+import 'backend/grpc_backend.dart';
 import 'backend/rest_backend.dart';
 import 'collection_reference_impl.dart';
 import 'document_reference_impl.dart';
@@ -37,11 +38,22 @@ class FirestoreImpl extends FirebaseService implements FirebaseFirestore {
           persistence: MemoryPersistence(),
         ),
         _remoteStore = RemoteStore(
-          backend: RestBackend(
-            projectId: app.options.projectId,
-            databaseId: databaseId,
-            authTokenProvider: authTokenProvider,
-          ),
+          backend: (settings ?? const Settings()).useGrpc
+              ? GrpcBackend(
+                  projectId: app.options.projectId,
+                  databaseId: databaseId,
+                  authTokenProvider: authTokenProvider,
+                  host: (settings ?? const Settings()).host ??
+                      'firestore.googleapis.com',
+                  sslEnabled: (settings ?? const Settings()).sslEnabled,
+                )
+              : RestBackend(
+                  projectId: app.options.projectId,
+                  databaseId: databaseId,
+                  authTokenProvider: authTokenProvider,
+                  pollingInterval:
+                      (settings ?? const Settings()).pollingInterval,
+                ),
         ),
         _syncEngine = SyncEngine(),
         super(app) {
@@ -230,6 +242,10 @@ class FirestoreImpl extends FirebaseService implements FirebaseFirestore {
     // Update backend with new settings
     if (_remoteStore.backend is RestBackend) {
       (_remoteStore.backend as RestBackend).updateSettings(_settings);
+    } else if (_remoteStore.backend is GrpcBackend) {
+      // Reinitialize Firestore with new settings by terminating and
+      // re-instantiating would be cleaner, but keep this as a no-op for now.
+      // GrpcBackend currently reads host/sslEnabled at construction time.
     }
   }
 

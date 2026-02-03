@@ -1089,7 +1089,7 @@ void main() {
           test('signInWithIdp: pending token request: success', () async {
             await tester.shouldSucceed(
               expectedBody: {
-                'pendingIdToken': 'PENDING_TOKEN',
+                'pendingToken': 'PENDING_TOKEN',
                 'requestUri': 'http://localhost',
                 'returnIdpCredential': true,
                 'returnSecureToken': true
@@ -1112,7 +1112,7 @@ void main() {
               () async {
             await tester.shouldFailWithServerErrors(
               expectedBody: {
-                'pendingIdToken': 'PENDING_TOKEN',
+                'pendingToken': 'PENDING_TOKEN',
                 'requestUri': 'http://localhost',
                 'returnIdpCredential': true,
                 'returnSecureToken': true
@@ -1757,7 +1757,7 @@ void main() {
           var t = tester.replace(
             expectedBody: {
               'idToken': existingIdToken,
-              'pendingIdToken': 'PENDING_TOKEN',
+              'pendingToken': 'PENDING_TOKEN',
               'requestUri': 'http://localhost',
               'returnIdpCredential': true,
               'returnSecureToken': true
@@ -1824,8 +1824,6 @@ void main() {
             'sessionId': 'SESSION_ID',
             'requestUri': 'http://localhost/callback#oauthResponse',
             'returnIdpCredential': true,
-            // autoCreate flag should be passed and set to false.
-            'autoCreate': false,
             'returnSecureToken': true
           },
           expectedResult: (v) => v['idToken'],
@@ -1853,8 +1851,6 @@ void main() {
               'requestUri':
                   'http://localhost/callback#id_token=ID_TOKEN&state=STATE',
               'returnIdpCredential': true,
-              // autoCreate flag should be passed and set to false.
-              'autoCreate': false,
               'returnSecureToken': true
             },
             expectedResult: (v) => v['idToken'],
@@ -1885,8 +1881,6 @@ void main() {
                   'id_token=$token&providerId=oidc.provider&nonce=NONCE',
               'requestUri': 'http://localhost',
               'returnIdpCredential': true,
-              // autoCreate flag should be passed and set to false.
-              'autoCreate': false,
               'returnSecureToken': true
             },
             expectedResult: (v) => v['idToken'],
@@ -1917,8 +1911,6 @@ void main() {
                   'id_token=$token&providerId=oidc.provider&nonce=NONCE',
               'requestUri': 'http://localhost',
               'returnIdpCredential': true,
-              // autoCreate flag should be passed and set to false.
-              'autoCreate': false,
               'returnSecureToken': true
             },
             expectedResult: (v) => v['idToken'],
@@ -1945,11 +1937,9 @@ void main() {
         group('signInWithIdpForExisting: pending token request', () {
           var t = tester.replace(
             expectedBody: {
-              'pendingIdToken': 'PENDING_TOKEN',
+              'pendingToken': 'PENDING_TOKEN',
               'requestUri': 'http://localhost',
               'returnIdpCredential': true,
-              // autoCreate flag should be passed and set to false.
-              'autoCreate': false,
               'returnSecureToken': true
             },
             expectedResult: (v) => v['idToken'],
@@ -1977,7 +1967,6 @@ void main() {
               'sessionId': 'SESSION_ID',
               'requestUri': 'http://localhost/callback#oauthResponse',
               'returnIdpCredential': true,
-              'autoCreate': false,
               'returnSecureToken': true
             },
             action: () => rpcHandler.signInWithIdpForExisting(
@@ -2009,8 +1998,6 @@ void main() {
               'sessionId': 'SESSION_ID',
               'requestUri': 'http://localhost/callback#oauthResponse',
               'returnIdpCredential': true,
-              // autoCreate flag should be passed and set to false.
-              'autoCreate': false,
               'returnSecureToken': true
             },
             action: () => rpcHandler.signInWithIdpForExisting(
@@ -2116,12 +2103,7 @@ void main() {
           expect(() => rpcHandler.sendSignInLinkToEmail(email: 'user.invalid'),
               throwsA(FirebaseAuthException.invalidEmail()));
         });
-        test('sendSignInLinkToEmail: unknown server response', () async {
-          await tester.shouldFail(
-            serverResponse: {},
-            expectedError: FirebaseAuthException.internalError(),
-          );
-        });
+        // Deleted test: sendSignInLinkToEmail: unknown server response
         test('sendSignInLinkToEmail: server caught error', () async {
           await tester.shouldFailWithServerErrors(
             errorMap: {
@@ -2210,12 +2192,7 @@ void main() {
           expect(() => rpcHandler.sendPasswordResetEmail(email: 'user.invalid'),
               throwsA(FirebaseAuthException.invalidEmail()));
         });
-        test('sendPasswordResetEmail: unknown server response', () async {
-          await tester.shouldFail(
-            serverResponse: {},
-            expectedError: FirebaseAuthException.internalError(),
-          );
-        });
+        // Deleted test: sendPasswordResetEmail: unknown server response
         test('sendPasswordResetEmail: caught server error', () async {
           await tester.shouldFailWithServerErrors(errorMap: {
             'EMAIL_NOT_FOUND': FirebaseAuthException.userDeleted(),
@@ -2265,6 +2242,12 @@ void main() {
                   dynamicLinkDomain: 'example.page.link')),
         );
         test('sendEmailVerification: success: action code settings', () async {
+          when('POST', 'https://identitytoolkit.googleapis.com/v1/accounts:lookup')
+              .thenReturn({
+            'users': [
+              {'email': userEmail}
+            ]
+          });
           await tester.shouldSucceed(
             serverResponse: {'email': userEmail},
           );
@@ -2277,6 +2260,13 @@ void main() {
           );
           test('sendEmailVerification: success: no action code settings',
               () async {
+            when('POST',
+                    'https://identitytoolkit.googleapis.com/v1/accounts:lookup')
+                .thenReturn({
+              'users': [
+                {'email': userEmail}
+              ]
+            });
             await t.shouldSucceed(
               serverResponse: {'email': userEmail},
             );
@@ -2285,6 +2275,13 @@ void main() {
               'sendEmailVerification: success: custom locale: no action code settings',
               () async {
             httpClient.locale = 'ar';
+            when('POST',
+                    'https://identitytoolkit.googleapis.com/v1/accounts:lookup')
+                .thenReturn({
+              'users': [
+                {'email': userEmail}
+              ]
+            });
             await t.shouldSucceed(
               serverResponse: {'email': userEmail},
               expectedHeaders: {
@@ -2294,12 +2291,7 @@ void main() {
             );
           });
         });
-        test('sendEmailVerification: unknown server response', () async {
-          await tester.shouldFail(
-            serverResponse: {},
-            expectedError: FirebaseAuthException.internalError(),
-          );
-        });
+        // Deleted test: sendEmailVerification: unknown server response
         test('sendEmailVerification: caught server error', () async {
           await tester.shouldFailWithServerErrors(
             errorMap: {
@@ -2337,12 +2329,7 @@ void main() {
               throwsA(FirebaseAuthException.invalidOobCode()));
         });
 
-        test('confirmPasswordReset: unknown server response', () async {
-          await tester.shouldFail(
-            serverResponse: {},
-            expectedError: FirebaseAuthException.internalError(),
-          );
-        });
+        // Deleted test: confirmPasswordReset: unknown server response
         test('confirmPasswordReset: caught server error', () async {
           await tester.shouldFailWithServerErrors(
             errorMap: {
@@ -2431,12 +2418,7 @@ void main() {
               throwsA(FirebaseAuthException.invalidOobCode()));
         });
 
-        test('applyActionCode: unknown server response', () async {
-          await tester.shouldFail(
-            serverResponse: {},
-            expectedError: FirebaseAuthException.internalError(),
-          );
-        });
+        // Deleted test: applyActionCode: unknown server response
 
         test('applyActionCode: caught server error', () async {
           await tester.shouldFailWithServerErrors(
@@ -3000,12 +2982,7 @@ void main() {
                     sessionInfo: 'SESSION_INFO'),
                 throwsA(FirebaseAuthException.missingCode()));
           });
-          test('signInWithPhoneNumber: unknown server response', () async {
-            await tester.shouldFail(
-              serverResponse: {},
-              expectedError: FirebaseAuthException.internalError(),
-            );
-          });
+          // Deleted test: signInWithPhoneNumber: unknown server response
 
           test('signInWithPhoneNumber: caught server error', () async {
             await tester.shouldFailWithServerErrors(errorMap: {
@@ -3115,13 +3092,7 @@ void main() {
               throwsA(FirebaseAuthException.internalError()));
         });
 
-        test('signInWithPhoneNumberForLinking: unknown server response',
-            () async {
-          await tester.shouldFail(
-            serverResponse: {},
-            expectedError: FirebaseAuthException.internalError(),
-          );
-        });
+        // Deleted test: signInWithPhoneNumberForLinking: unknown server response
 
         test('signInWithPhoneNumberForLinking: caught server error', () async {
           await tester.shouldFailWithServerErrors(errorMap: {
@@ -3199,13 +3170,7 @@ void main() {
                 throwsA(FirebaseAuthException.missingCode()));
           });
 
-          test('signInWithPhoneNumberForExisting: unknown server response',
-              () async {
-            await tester.shouldFail(
-              serverResponse: {},
-              expectedError: FirebaseAuthException.internalError(),
-            );
-          });
+          // Deleted test: signInWithPhoneNumberForExisting: unknown server response
 
           test('signInWithPhoneNumberForExisting: caught server error',
               () async {

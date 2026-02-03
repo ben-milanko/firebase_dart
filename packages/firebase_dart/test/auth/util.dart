@@ -66,7 +66,7 @@ class Expectation {
           ..remove('x-goog-api-client')
           ..removeWhere((key, value) =>
               key.startsWith('X-Firebase-') &&
-              (key != 'X-Firebase-Locale' || value == 'en_US')),
+              !_headers.containsKey(key)),
         _headers..remove('Content-Type'));
 
     var response = await (_response is Function ? _response(r) : _response);

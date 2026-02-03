@@ -491,8 +491,7 @@ class IsolateFirebaseAuth extends IsolateFirebaseService
 
   @override
   Future<UserCredential> signInWithAuthProvider(AuthProvider provider) {
-    // TODO: implement signInWithAuthProvider
-    throw UnimplementedError();
+    return invoke(#signInWithAuthProvider, [provider]);
   }
 
   @override
@@ -687,6 +686,8 @@ class FirebaseAuthFunctionCall<T> extends BaseFunctionCall<T> {
         };
       case #signInWithMultiFactorAssertion:
         return (auth as FirebaseAuthImpl).signInWithMultiFactorAssertion;
+      case #signInWithAuthProvider:
+        return auth.signInWithAuthProvider;
     }
     throw UnsupportedError(
         'FirebaseAuthFunctionCall with reference $functionName not supported');

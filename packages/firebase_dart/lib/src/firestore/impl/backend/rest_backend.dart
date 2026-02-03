@@ -21,13 +21,16 @@ class RestBackend implements FirestoreBackend {
   String _host = 'firestore.googleapis.com';
   bool _sslEnabled = true;
   bool _networkEnabled = true;
+  Duration _pollingInterval;
 
   RestBackend({
     required this.projectId,
     required this.databaseId,
     this.authTokenProvider,
     http.Client? httpClient,
-  }) : httpClient = httpClient ?? http.Client();
+    Duration pollingInterval = const Duration(seconds: 1),
+  })  : httpClient = httpClient ?? http.Client(),
+        _pollingInterval = pollingInterval;
 
   String get _baseUrl {
     final scheme = _sslEnabled ? 'https' : 'http';
@@ -39,6 +42,7 @@ class RestBackend implements FirestoreBackend {
       _host = settings.host!;
     }
     _sslEnabled = settings.sslEnabled;
+    _pollingInterval = settings.pollingInterval;
   }
 
   Future<Map<String, String>> _getHeaders() async {
@@ -225,7 +229,7 @@ class RestBackend implements FirestoreBackend {
     final controller = StreamController<Document>();
 
     Timer? timer;
-    timer = Timer.periodic(const Duration(seconds: 1), (t) async {
+    timer = Timer.periodic(_pollingInterval, (t) async {
       if (!_networkEnabled) return;
 
       try {
@@ -249,7 +253,7 @@ class RestBackend implements FirestoreBackend {
     final controller = StreamController<List<Document>>();
 
     Timer? timer;
-    timer = Timer.periodic(const Duration(seconds: 1), (t) async {
+    timer = Timer.periodic(_pollingInterval, (t) async {
       if (!_networkEnabled) return;
 
       try {

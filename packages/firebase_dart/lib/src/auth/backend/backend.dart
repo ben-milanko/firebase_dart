@@ -119,7 +119,19 @@ class BackendConnection {
   }
 
   Future<BackendUser> _userFromIdToken(String idToken) async {
-    var jwt = JsonWebToken.unverified(idToken); // TODO verify
+    var tokenSigningKey = await backend.getTokenSigningKey();
+    var store = JsonWebKeyStore()..addKey(tokenSigningKey);
+
+    var jws = JsonWebSignature.fromCompactSerialization(idToken);
+    if (!await jws.verify(store)) {
+      throw ArgumentError('Invalid id token: signature verification failed');
+    }
+
+    var jwt = JsonWebToken.unverified(idToken);
+    if (jwt.claims.expiry != null && jwt.claims.expiry!.isBefore(clock.now())) {
+      throw ArgumentError('Invalid id token: token expired');
+    }
+
     var uid = jwt.claims['uid'] ?? jwt.claims.subject;
     if (uid == null) {
       throw ArgumentError('Invalid id token (${jwt.claims}): no subject');
