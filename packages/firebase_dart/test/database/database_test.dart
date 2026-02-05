@@ -53,9 +53,15 @@ void runDatabaseTests({bool isolated = false}) {
     testsWith({'host': 'mem://test/', 'secret': 'x'}, isolated: isolated);
   });
 
-  group('https', () {
-    testsWith(s.secrets, isolated: isolated);
-  }, tags: ['serial']);
+  final hasSecrets = s.secrets.isNotEmpty && s.secrets['host'] != null;
+  if (hasSecrets) {
+    group('https', () {
+      testsWith(s.secrets, isolated: isolated);
+    }, tags: ['serial']);
+  } else {
+    group('https', () {},
+        tags: ['serial'], skip: 'Missing test/secrets.json');
+  }
 
   group('FirebaseDatabase.delete', () {
     var testUrl = 'mem://test2';

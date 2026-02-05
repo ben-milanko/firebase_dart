@@ -9,6 +9,7 @@ import '../document.dart';
 import '../filter.dart';
 import '../mutation.dart';
 import '../query_impl.dart';
+import '../comparator.dart';
 import 'backend.dart';
 import '../grpc_generated/google/firestore/v1/firestore.pbgrpc.dart';
 import '../grpc_generated/google/firestore/v1/document.pb.dart' as proto;
@@ -91,9 +92,13 @@ class GrpcBackend implements FirestoreBackend {
   Future<List<Document>> executeQuery(QueryImpl queryImpl) async {
     _verifyNetworkEnabled();
 
+    // Check if we need to reverse orders for limitToLast
+    final isLimitToLast = queryImpl.limitToLastValue != null;
+
     final request = RunQueryRequest()
       ..parent = _queryParent(queryImpl)
-      ..structuredQuery = _queryToStructuredQuery(queryImpl);
+      ..structuredQuery =
+          _queryToStructuredQuery(queryImpl, reverseOrder: isLimitToLast);
 
     try {
       final responseStream =
@@ -105,6 +110,10 @@ class GrpcBackend implements FirestoreBackend {
           documents.add(_documentFromProto(response.document));
         }
       }
+
+      // Sort documents based on original query order
+      final comparator = DocumentComparator(queryImpl.orders);
+      documents.sort(comparator.compare);
 
       return documents;
     } on GrpcError catch (e) {
@@ -130,9 +139,24 @@ class GrpcBackend implements FirestoreBackend {
   Future<void> commitTransaction(
       List<Mutation> mutations, Set<String> readPaths) async {
     _verifyNetworkEnabled();
-    // Start transaction, then commit
-    // Similar to RestBackend but using gRPC calls
-    throw UnimplementedError('commitTransaction not yet implemented for GrpcBackend');
+    
+    try {
+      // 1. Begin Transaction
+      final beginRequest = BeginTransactionRequest()..database = _databasePath;
+      final beginResponse = await _client.beginTransaction(beginRequest,
+          options: await _getOptions());
+      final transactionId = beginResponse.transaction;
+
+      // 2. Commit with Transaction ID
+      final commitRequest = CommitRequest()
+        ..database = _databasePath
+        ..transaction = transactionId
+        ..writes.addAll(mutations.map((m) => _mutationToProto(m)));
+
+      await _client.commit(commitRequest, options: await _getOptions());
+    } on GrpcError catch (e) {
+      throw _parseGrpcError(e);
+    }
   }
 
   @override
@@ -184,6 +208,10 @@ class GrpcBackend implements FirestoreBackend {
     final documentsByPath = <String, Document>{};
     const targetId = 1;
 
+    // Check if we need to reverse orders for limitToLast
+    final isLimitToLast = queryImpl.limitToLastValue != null;
+    final comparator = DocumentComparator(queryImpl.orders);
+
     _getOptions().then((options) {
       responseStream = _client.listen(requestStream.stream, options: options);
 
@@ -192,24 +220,32 @@ class GrpcBackend implements FirestoreBackend {
         ..addTarget = (Target()
           ..query = (Target_QueryTarget()
             ..parent = _queryParent(queryImpl)
-            ..structuredQuery = _queryToStructuredQuery(queryImpl))
+            ..structuredQuery =
+                _queryToStructuredQuery(queryImpl, reverseOrder: isLimitToLast))
           ..targetId = targetId);
 
       requestStream.add(request);
 
       responseStream.listen((response) {
+        bool changed = false;
         if (response.hasDocumentChange()) {
           final doc = _documentFromProto(response.documentChange.document);
           documentsByPath[doc.path] = doc;
-          controller.add(documentsByPath.values.toList());
+          changed = true;
         } else if (response.hasDocumentDelete()) {
           final path = _extractPathFromName(response.documentDelete.document);
           documentsByPath.remove(path);
-          controller.add(documentsByPath.values.toList());
+          changed = true;
         } else if (response.hasDocumentRemove()) {
           final path = _extractPathFromName(response.documentRemove.document);
           documentsByPath.remove(path);
-          controller.add(documentsByPath.values.toList());
+          changed = true;
+        }
+
+        if (changed) {
+          final sortedDocs = documentsByPath.values.toList()
+            ..sort(comparator.compare);
+          controller.add(sortedDocs);
         }
       }, onError: controller.addError, onDone: () {
         requestStream.close();
@@ -310,7 +346,8 @@ class GrpcBackend implements FirestoreBackend {
     throw ArgumentError('Unknown mutation type');
   }
 
-  query.StructuredQuery _queryToStructuredQuery(QueryImpl queryImpl) {
+  query.StructuredQuery _queryToStructuredQuery(QueryImpl queryImpl,
+      {bool reverseOrder = false}) {
     final structured = query.StructuredQuery();
 
     if (queryImpl.isCollectionGroup) {
@@ -329,13 +366,20 @@ class GrpcBackend implements FirestoreBackend {
 
     if (queryImpl.orders.isNotEmpty) {
       structured.orderBy.addAll(queryImpl.orders.map((order) {
+        final descending = reverseOrder ? !order.descending : order.descending;
         return query.StructuredQuery_Order()
           ..field_1 = (query.StructuredQuery_FieldReference()
             ..fieldPath = order.fieldPath.toString())
-          ..direction = order.descending
+          ..direction = descending
               ? query.StructuredQuery_Direction.DESCENDING
               : query.StructuredQuery_Direction.ASCENDING;
       }));
+    } else if (reverseOrder) {
+      // If no explicit order, we need to order by __name__ to support limitToLast reversal
+      structured.orderBy.add(query.StructuredQuery_Order()
+        ..field_1 = (query.StructuredQuery_FieldReference()
+          ..fieldPath = FieldPath.documentId().toString())
+        ..direction = query.StructuredQuery_Direction.DESCENDING);
     }
 
     if (queryImpl.limitValue != null) {
@@ -345,7 +389,29 @@ class GrpcBackend implements FirestoreBackend {
           wrappers.Int32Value()..value = queryImpl.limitToLastValue!;
     }
 
+    final startAtBoundary =
+        reverseOrder ? queryImpl.endAtBoundary : queryImpl.startAtBoundary;
+    final endAtBoundary =
+        reverseOrder ? queryImpl.startAtBoundary : queryImpl.endAtBoundary;
+
+    if (startAtBoundary != null) {
+      structured.startAt = _boundaryToCursor(startAtBoundary, isStart: true);
+    }
+    if (endAtBoundary != null) {
+      structured.endAt = _boundaryToCursor(endAtBoundary, isStart: false);
+    }
+
     return structured;
+  }
+
+  query.Cursor _boundaryToCursor(QueryBoundary boundary,
+      {required bool isStart}) {
+    final cursor = query.Cursor();
+    // For startAt: inclusive -> before=true
+    // For endAt: inclusive -> before=false
+    cursor.before = isStart ? boundary.inclusive : !boundary.inclusive;
+    cursor.values.addAll(boundary.values.map(_valueToProtoValue));
+    return cursor;
   }
 
   query.StructuredQuery_Filter _filtersToStructured(

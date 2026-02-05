@@ -2,12 +2,9 @@ import 'dart:math';
 
 import 'package:clock/clock.dart';
 import 'package:jose/jose.dart';
+import 'package:firebase_dart/src/implementation/testing.dart' as testing;
 
-final key = JsonWebKey.fromJson({
-  'kty': 'oct',
-  'k':
-      'AyM1SysPpbyDfgZld3umj1qzKObwVMkoqQ-EstJQLr_T-1qS0gZH75aKtMN3Yj0iPS4hcgUuTwjAzZr1Z9CAow'
-});
+final key = testing.BackendImpl.tokenSigningKey;
 
 String createMockGoogleIdToken({required String uid, String? email}) {
   var builder = JsonWebSignatureBuilder()

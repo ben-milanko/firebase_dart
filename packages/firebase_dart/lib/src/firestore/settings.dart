@@ -36,7 +36,7 @@ class Settings {
     this.persistenceEnabled = true,
     this.cacheSizeBytes,
     this.pollingInterval = const Duration(seconds: 1),
-    this.useGrpc = false,
+    this.useGrpc = true,
   });
 
   Settings copyWith({

@@ -21,7 +21,7 @@ dependencies:
   logging: ^1.0.2
   flutter_apns_only: ^1.0.0
   crypto: ^3.0.3
-  app_links: ^6.3.3
+  app_links: ">=6.3.3 <8.0.0"
   webview_flutter: ^4.10.0
 
 dev_dependencies:

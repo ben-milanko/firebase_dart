@@ -57,7 +57,7 @@ class FakePersistenceManager extends NoopPersistenceManager {
 }
 
 class NoopPersistenceManager implements PersistenceManager {
-  bool _insideTransaction = false;
+  int _transactionDepth = 0;
 
   @override
   bool get isEnabled => false;
@@ -104,20 +104,17 @@ class NoopPersistenceManager implements PersistenceManager {
 
   @override
   T runInTransaction<T>(T Function() callable) {
-    // We still track insideTransaction, so we can catch bugs.
-    assert(!_insideTransaction,
-        'runInTransaction called when an existing transaction is already in progress.');
-    _insideTransaction = true;
+    _transactionDepth++;
     try {
       return callable();
     } finally {
-      _insideTransaction = false;
+      _transactionDepth--;
     }
   }
 
   void _verifyInsideTransaction() {
-    assert(
-        _insideTransaction, 'Transaction expected to already be in progress.');
+    assert(_transactionDepth > 0,
+        'Transaction expected to already be in progress.');
   }
 
   @override

@@ -23,6 +23,8 @@ class DefaultPersistenceManager implements PersistenceManager {
   final CachePolicy cachePolicy;
   int _serverCacheUpdatesSinceLastPruneCheck = 0;
 
+  bool _insideTransaction = false;
+
   DefaultPersistenceManager(this.storageLayer, this.cachePolicy)
       : _trackedQueryManager = TrackedQueryManager(storageLayer);
 
@@ -139,13 +141,18 @@ class DefaultPersistenceManager implements PersistenceManager {
 
   @override
   T runInTransaction<T>(T Function() callable) {
+    if (_insideTransaction) {
+      return callable();
+    }
     storageLayer.beginTransaction();
+    _insideTransaction = true;
     try {
       var result = callable();
       storageLayer.setTransactionSuccessful();
       return result;
     } finally {
       storageLayer.endTransaction();
+      _insideTransaction = false;
     }
   }
 
